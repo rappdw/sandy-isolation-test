@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy this file to targets.json (gitignored) and fill in the addresses you planted canary tokens on. Leave the token VALUES out — record those out-of-band and grep the report for them. Any field may be null or omitted if you didn't plant that target. Retrieving the token served at one of these addresses is undeniable proof of a Layer-1 breach.",
+  "docker_host": "http://host.docker.internal:8765/token",
+  "lan_host": "http://192.168.1.50:8765/token",
+  "public_nonallowlisted": "http://maintainer-host/token"
+}
