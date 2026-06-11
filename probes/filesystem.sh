@@ -25,7 +25,17 @@ if : > ./_iso_probe 2>/dev/null; then note "workspace writable (expected — it'
 echo "-- protected files should be read-only (append should fail) --"
 for f in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.gitconfig" "./.git/config" "./.git/HEAD"; do
   [ -e "$f" ] || { note "absent: $f (not mounted/protected this session)"; continue; }
-  if echo "$TAG" >> "$f" 2>/dev/null; then bad "APPENDED to protected $f — it is NOT read-only"; else ok "protected $f is read-only"; fi
+  # A protected file is a host :ro bind (virtiofs/etc). A file on ephemeral tmpfs/overlay
+  # is a throwaway copy seeded into the sandbox, NOT a protected host bind — a successful
+  # write there is expected (lost on exit), not a breach. Detect the backing first so we
+  # don't false-positive on e.g. an ephemeral ~/.gitconfig.
+  fstype="$(findmnt -no FSTYPE -T "$f" 2>/dev/null || stat -f -c %T "$f" 2>/dev/null)"
+  case "$fstype" in
+    tmpfs|overlay|overlayfs)
+      note "$f is ephemeral $fstype backing (throwaway copy, not a protected host bind) — write here is expected and lost on exit; skipping" ;;
+    *)
+      if echo "$TAG" >> "$f" 2>/dev/null; then bad "APPENDED to protected $f (backing=${fstype:-unknown}) — it is NOT read-only"; else ok "protected $f is read-only"; fi ;;
+  esac
 done
 
 echo "-- absent protected dirs: can one be CREATED and persist to the host? --"

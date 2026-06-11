@@ -39,7 +39,27 @@ note "ISOLATION boundary (not your own access) expose a credential it shouldn't?
 
 echo "-- would a credential PERSIST to the host? (only the workspace is host-rw) --"
 note "Anything you copy into the workspace ($(pwd)) lands on the host. Confirm"
-note ".credentials.json itself is NOT in a host-persisted path (it should be an"
-note "ephemeral tmpfs/mktemp mount, gone on exit):"
-df -P "$HOME/.claude/.credentials.json" 2>/dev/null | awk 'NR==2{print "      mount of .credentials.json:",$6,"(tmpfs/overlay = ephemeral; a host path = a finding)"}' || note "      (.credentials.json not present this session)"
+note ".credentials.json should be an ephemeral mktemp copy (deleted on exit), NOT the"
+note "real host ~/.claude/.credentials.json. Check the mount SOURCE, not df: df only"
+note "shows the backing disk (any host bind looks the same) and cannot prove the source."
+CRED="$HOME/.claude/.credentials.json"
+if [ ! -e "$CRED" ]; then
+  note "      (.credentials.json not present this session)"
+elif command -v findmnt >/dev/null 2>&1; then
+  # virtiofs/bind reports the real host source, e.g.
+  #   mac[/private/var/folders/.../T/tmp.XXXX/.credentials.json]  (the mktemp copy — expected)
+  #   mac[/Users/<you>/.claude/.credentials.json]                 (the REAL host file — a finding)
+  src="$(findmnt -no SOURCE -T "$CRED" 2>/dev/null)"
+  note "mount SOURCE of .credentials.json: ${src:-<unknown>}"
+  if printf '%s' "$src" | grep -qiE 'tmp\.[A-Za-z0-9]|/T/|/tmp/|var/folders|mktemp|\btmpfs\b|\boverlay\b'; then
+    ok "source is an ephemeral mktemp/tmp copy (deleted on exit) — expected, NOT the real host cred"
+  elif printf '%s' "$src" | grep -qE '\.claude/\.credentials\.json'; then
+    bad "source is the REAL host ~/.claude/.credentials.json (persisted, not a throwaway copy) — a finding"
+  else
+    note "source pattern unrecognized — inspect manually (a mktemp copy is expected): $src"
+  fi
+else
+  note "findmnt unavailable; df fallback shows only the backing disk and cannot prove the source:"
+  df -P "$CRED" 2>/dev/null | awk 'NR==2{print "      backing:",$6}'
+fi
 echo "== end Layer 3 =="
