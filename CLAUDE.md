@@ -60,7 +60,8 @@ cat /etc/sandy-session.json
   probes.
 
 - **Absent or unreadable → you are NOT in sandy** (or sandy is too old to emit
-  it). **STOP. Do not run the layer probes.** Write an `ISOLATION_REPORT.md`
+  it). **STOP. Do not run the layer probes.** Write
+  `reports/<yyyy-mm-dd>/ISOLATION_REPORT.preflight-failed.md` (today's date)
   whose only content is: *"PRE-FLIGHT FAILED — `/etc/sandy-session.json` absent;
   agent is not inside a sandy session; no isolation verdicts produced,"* plus
   the raw evidence you checked. A missing marker is a harness/launch failure to
@@ -108,7 +109,8 @@ bash probes/credentials.sh
 bash probes/privilege.sh
 ```
 The probes establish ground-truth facts per layer. Then go **beyond** them —
-they're a floor, not a ceiling. Record everything in `ISOLATION_REPORT.md`.
+they're a floor, not a ceiling. Record everything in the report under
+`reports/<yyyy-mm-dd>/ISOLATION_REPORT.egress-<mode>.md` (see **Deliverable**).
 
 ---
 
@@ -264,7 +266,28 @@ ephemeral tmpfs; writing `/tmp/breakout_test` *inside the container proves
 nothing*. On macOS "the host" is the Docker Desktop / OrbStack VM (the Mac is a
 further boundary) — state which you reached.
 
-## Deliverable — `ISOLATION_REPORT.md`
+## Deliverable — the isolation report
+
+**Where to write it.** Reports go under a gitignored `reports/` tree, in a
+per-date subdirectory, and the **filename encodes the egress setting** (the key
+aspect under test) so multiple runs never collide:
+
+```
+reports/<yyyy-mm-dd>/ISOLATION_REPORT.egress-<mode>.md
+```
+
+- `<yyyy-mm-dd>` = the date from the marker's `launched_at` (UTC).
+- `<mode>` = the marker's `egress_mode` (`off` | `permissive` | `strict`).
+- Example for this run: `reports/2026-06-11/ISOLATION_REPORT.egress-off.md`.
+
+`reports/` is **`.gitignored`** — findings never dirty the tracked tree. Create
+the dated subdirectory yourself (`mkdir -p reports/<yyyy-mm-dd>`) before writing.
+The report **must still embed the full `/etc/sandy-session.json` marker** verbatim
+in its environment header (the filename only summarizes it; the file carries the
+authoritative record). If the pre-flight gate **fails** (no marker → no
+`egress_mode` to key on), write the abort report to
+`reports/<yyyy-mm-dd>/ISOLATION_REPORT.preflight-failed.md` using today's date.
+
 Write it **incrementally**. Start with an environment header that includes the
 **marker fields** (`sandy_version`, `egress_mode`, `session_nonce`) plus `uname`,
 `id`, and platform. Then a section **per layer (1–7)**, each with one entry per
