@@ -1,51 +1,78 @@
 #!/usr/bin/env bash
-# Layers 4 & 5 — process/privilege and resource isolation. Read-only probe.
-# Reports the privilege posture and resource ceilings. Does NOT try to exhaust
-# anything (no fork bombs, no disk fill) — resource limits are tested by READING.
+# Layers 4 & 5 - process/privilege and resources. Records evidence only.
+#
+# What changed from v1, and why:
+#  * v1's header said "should be non-root, uid 1001-ish" - the precise wrong
+#    expectation that produced the original false negative, shipped in the file the
+#    agent runs. L4.01 now asserts uid == the marker's host_uid (501 on a Mac).
+#  * Capabilities are graded RELATIVELY: CapBnd = the documented five is sandy
+#    working as designed; only capabilities beyond that set, and only dangerous
+#    ones, are a finding.
+#  * seccomp / AppArmor / SELinux and the PID namespace are measured at all for the
+#    first time (never mentioned anywhere in v1).
+#  * L5's rubric was a string comparison against 'max'. Verified in a real run:
+#    memory.max = 89.4% of host RAM and cpu.max = 100% of cores, both graded HELD.
+#    A cap at ~host capacity provides no containment, so L5.02/L5.03 are graded as
+#    a RATIO of host capacity, with the thresholds written down in testplan.json.
+#  * L5.01 verifies the cgroup NAMESPACE first: with cgroupns=host the probe reads
+#    the host root cgroup and can produce both false BREACHED and false HELD.
+#  * Limits are still READ, never exhausted. The one enforcement probe (L5.05) is
+#    opt-in, bounded by bytes AND time, confined to this container's own tmpfs, and
+#    deletes what it wrote.
 set -u
-ok(){ printf '  [HELD]   %s\n' "$1"; }
-bad(){ printf '  [!!!!]   %s\n' "$1"; }
-note(){ printf '  [info]   %s\n' "$1"; }
+EV_PROBE_NAME="privilege.sh"
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_evidence.sh"
+ev_boot || exit 1
+
+ev_parse_L4_01() {
+  awk '/^uid=/{print "uid=" substr($0,5)} /^gid=/{print "gid=" substr($0,5)}' "$1" \
+    | sed 's/[^0-9=a-z_]*$//'
+}
+ev_parse_L4_02() {
+  awk -F'[: \t]+' '
+    /^CapInh/{print "capinh=" $2} /^CapPrm/{print "capprm=" $2}
+    /^CapEff/{print "capeff=" $2} /^CapBnd/{print "capbnd=" $2}
+    /^CapAmb/{print "capamb=" $2} /^NoNewPrivs/{print "nonewprivs=" $2}
+    /^Seccomp:/{print "seccomp=" $2} /^Seccomp_filters/{print "seccomp_filters=" $2}' "$1"
+}
+ev_parse_L4_04() { awk -F'[: \t]+' '/^NoNewPrivs/{print "nonewprivs=" $2}' "$1"; }
+ev_parse_L4_05() {
+  awk -F'[: \t]+' '/^Seccomp:/{print "seccomp=" $2} /^Seccomp_filters/{print "seccomp_filters=" $2}' "$1"
+  local lsm; lsm="$(sed -n '2p' "$1" | tr -d '\0' | tr -d '\n')"
+  [ -n "$lsm" ] && echo "lsm_label=$lsm" || echo "lsm_label=none"
+}
+ev_parse_L4_10() {
+  echo "pid1_cmdline=$(head -1 "$1" | tr -d '\n' | cut -c1-120)"
+  awk -F= '/^NPROCS=/{print "nprocs=" $2}' "$1"
+}
+ev_parse_L5_01() {
+  local priv=true line path
+  while IFS= read -r line; do
+    path="${line##*:}"
+    [ "$path" = "/" ] || priv=false
+  done < <(grep -E '^[0-9]+:' "$1")
+  echo "cgroup_path=$(grep -E '^[0-9]+:' "$1" | head -1)"
+  echo "cgroupns_private=$priv"
+}
 
 echo "== Layer 4: process / privilege =="
+ev_planned L4.01     # uid == marker.host_uid, non-root
+ev_planned L4.02     # CapEff/CapPrm/CapInh == 0
+ev_planned L4.03     # bounding set vs the documented five
+ev_planned L4.04     # NoNewPrivs
+ev_planned L4.05     # seccomp + LSM (measurement)
+ev_planned L4.06     # actively attempt privilege regain
+ev_planned L4.07     # docker/containerd socket surface
+ev_planned L4.08     # docker daemon over TCP
+ev_planned L4.09     # setuid inventory (measurement)
+ev_planned L4.10     # PID namespace
 
-echo "-- identity (should be non-root, uid 1001-ish) --"
-id 2>/dev/null | sed 's/^/      /'
-if [ "$(id -u)" = "0" ]; then bad "running as ROOT (uid 0) — privilege drop failed"; else ok "non-root (uid $(id -u))"; fi
+echo "== Layer 5: resources (read the ceilings; never exhaust them) =="
+ev_planned L5.01     # GATE: cgroup namespace
+ev_planned L5.02     # memory cap, graded relatively
+ev_planned L5.03     # cpu cap, graded relatively
+ev_planned L5.04     # pids + tmpfs sizes
+ev_planned L5.05     # OPT-IN bounded enforcement probe (skipped unless SANDY_ISO_ENFORCEMENT=1)
 
-echo "-- no-new-privileges + capabilities --"
-nnp="$(grep -i NoNewPrivs /proc/self/status 2>/dev/null | awk '{print $2}')"
-[ "$nnp" = "1" ] && ok "NoNewPrivs=1 (setuid escalation disabled)" || bad "NoNewPrivs=$nnp (escalation may be possible)"
-note "effective capabilities (CapEff; 0000000000000000 = none):"
-grep -E '^Cap(Inh|Prm|Eff|Bnd)' /proc/self/status 2>/dev/null | sed 's/^/      /'
-capeff="$(grep '^CapEff' /proc/self/status 2>/dev/null | awk '{print $2}')"
-[ "$capeff" = "0000000000000000" ] && ok "no effective capabilities" || note "CapEff=$capeff — decode with: capsh --decode=$capeff (some caps present)"
-
-echo "-- root escalation paths --"
-command -v sudo >/dev/null 2>&1 && note "sudo present: $(command -v sudo) (try it — should fail without a setuid+sudoers path)" || ok "no sudo binary"
-note "setuid-root binaries (a writable/exploitable one would be an escalation path):"
-find / -xdev -perm -4000 -type f 2>/dev/null | head -20 | sed 's/^/      /' || true
-
-echo "-- Docker escape surface (the big one) --"
-for s in /var/run/docker.sock /run/docker.sock; do
-  [ -e "$s" ] && bad "DOCKER SOCKET PRESENT: $s — container can control the daemon (full host escape)" || ok "no docker socket at $s"
-done
-command -v docker >/dev/null 2>&1 && note "docker client present; 'docker ps' should fail (no daemon reachable)" || ok "no docker client"
-
-echo "-- mounts: anything rw/host that shouldn't be, or a privileged mount --"
-note "non-tmpfs, non-overlay mounts (host bind mounts; check rw vs ro):"
-grep -vE ' (tmpfs|proc|sysfs|cgroup|cgroup2|mqueue|devpts|overlay|shm) ' /proc/mounts 2>/dev/null | sed 's/^/      /' | head -25
-
-echo ""
-echo "== Layer 5: resources (read the ceilings — do NOT exhaust) =="
-note "CPUs visible: $(nproc 2>/dev/null)"
-free -h 2>/dev/null | sed 's/^/      /' || true
-echo "-- cgroup limits (memory / pids / cpu) --"
-for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/pids.max /sys/fs/cgroup/cpu.max \
-         /sys/fs/cgroup/memory/memory.limit_in_bytes /sys/fs/cgroup/pids/pids.max; do
-  [ -r "$f" ] && note "$f = $(cat "$f" 2>/dev/null)"
-done
-note "tmpfs sizes (expect ~1G /tmp, ~2G /home/claude):"
-df -h /tmp /home/claude 2>/dev/null | sed 's/^/      /'
-note "If memory.max / pids.max read 'max' (unlimited), the caps are NOT applied — a finding."
-echo "== end Layers 4 & 5 =="
+echo "== end Layers 4 & 5 (verdicts are computed host-side by adjudicate.sh) =="

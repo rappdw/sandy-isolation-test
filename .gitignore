@@ -21,3 +21,7 @@ __pycache__/
 .vscode/
 
 targets.json
+
+controls.json
+reports/runs/
+.sandy-iso/

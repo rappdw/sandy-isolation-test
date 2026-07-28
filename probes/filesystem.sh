@@ -1,59 +1,44 @@
 #!/usr/bin/env bash
-# Layer 2 — filesystem isolation. Benign read-mostly probe: it ATTEMPTS writes to
-# places that should be read-only and reports whether they were blocked (good) or
-# succeeded (a finding). It destroys nothing — protected files are appended-to
-# with a marker comment that, if the mount is :ro, never lands.
+# Layer 2 - filesystem. Runs the pre-registered L2 tests and records evidence.
+# No verdicts here: there is no ok()/bad() in this file by design.
+#
+# What changed from v1, and why:
+#  * v1 inferred "protected" from "not tmpfs" and then APPENDED. A rw host bind -
+#    exactly the regression the probe exists to catch - fell through to the write
+#    branch, so the append SUCCEEDED, landed on the maintainer's real file, and was
+#    never reverted. L2.02 now measures ro/rw + host-backing FIRST (mount flags are
+#    stronger evidence than a successful append) and L2.03 only writes where the
+#    mount is already known to be read-only.
+#  * v1's mount enumeration FILTERED /proc/mounts down to the expected mounts, so an
+#    unexpected mount could never appear. L2.04 inverts it: enumerate everything,
+#    classify, print the unclassified remainder.
+#  * /proc/mounts is uninformative on the primary platform (every host bind shows as
+#    `mac`). Source resolution now uses findmnt / /proc/self/mountinfo throughout.
+#  * L2.07 leaves ONE pre-registered, inert artifact so the session-end detective
+#    control can finally be graded (H2.01) - and records every directory component
+#    it created so cleanup removes all of them, not just the leaf.
 set -u
-ok(){ printf '  [HELD]   %s\n' "$1"; }
-bad(){ printf '  [!!!!]   %s\n' "$1"; }
-note(){ printf '  [info]   %s\n' "$1"; }
-TAG="# sandy-isolation-test $$ (delete me)"
+EV_PROBE_NAME="filesystem.sh"
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_evidence.sh"
+ev_boot || exit 1
 
 echo "== Layer 2: filesystem =="
+ev_planned L2.01     # write the read-only root
+ev_planned L2.02     # classify protected paths (no writes)
+ev_planned L2.03     # append only where measured ro
+ev_planned L2.04     # enumerate all mounts -> unclassified remainder
+ev_planned L2.05     # CANARY: host file outside the mount set
+ev_planned L2.06     # CANARY: sentinel proving the :ro file is the host's
+ev_planned L2.07     # absent protected dir + the pre-registered artifact
+ev_planned L2.08     # traversal / symlink / procfs escapes
+ev_planned L2.09     # /proc and /sys masking
+ev_planned L2.10     # writable-mount flags (measurement)
+ev_planned L2.11     # /etc/passwd and /etc/group
 
-echo "-- read-only root filesystem (writes to / should fail) --"
-for p in /etc/_iso_probe /usr/_iso_probe /bin/_iso_probe; do
-  if (set -C; : > "$p") 2>/dev/null; then bad "WROTE $p — root FS is NOT read-only"; rm -f "$p"; else ok "$p write blocked"; fi
-done
-
-echo "-- ephemeral tmpfs (writable, but lost on exit) --"
-if : > /tmp/_iso_probe 2>/dev/null; then note "/tmp writable (ephemeral tmpfs, expected)"; rm -f /tmp/_iso_probe; else bad "/tmp not writable (unexpected)"; fi
-
-echo "-- workspace (writing the mounted workspace is EXPECTED) --"
-if : > ./_iso_probe 2>/dev/null; then note "workspace writable (expected — it's the mounted project dir)"; rm -f ./_iso_probe; else note "workspace not writable"; fi
-
-echo "-- protected files should be read-only (append should fail) --"
-for f in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.gitconfig" "./.git/config" "./.git/HEAD"; do
-  [ -e "$f" ] || { note "absent: $f (not mounted/protected this session)"; continue; }
-  # A protected file is a host :ro bind (virtiofs/etc). A file on ephemeral tmpfs/overlay
-  # is a throwaway copy seeded into the sandbox, NOT a protected host bind — a successful
-  # write there is expected (lost on exit), not a breach. Detect the backing first so we
-  # don't false-positive on e.g. an ephemeral ~/.gitconfig.
-  fstype="$(findmnt -no FSTYPE -T "$f" 2>/dev/null || stat -f -c %T "$f" 2>/dev/null)"
-  case "$fstype" in
-    tmpfs|overlay|overlayfs)
-      note "$f is ephemeral $fstype backing (throwaway copy, not a protected host bind) — write here is expected and lost on exit; skipping" ;;
-    *)
-      if echo "$TAG" >> "$f" 2>/dev/null; then bad "APPENDED to protected $f (backing=${fstype:-unknown}) — it is NOT read-only"; else ok "protected $f is read-only"; fi ;;
-  esac
-done
-
-echo "-- absent protected dirs: can one be CREATED and persist to the host? --"
-# sandy only DETECTS these at session end; creating one that lands on the host
-# workspace is a real finding. We create + immediately remove to avoid leaving it.
-for d in ./.github/workflows ./.git/hooks ./.vscode; do
-  if [ -e "$d" ]; then note "exists already: $d"; continue; fi
-  if mkdir -p "$d" 2>/dev/null; then bad "CREATED $d (absent protected dir is writable — verify on host whether it persisted)"; rm -rf "$d" 2>/dev/null; else ok "$d creation blocked"; fi
-done
-
-echo "-- what is actually mounted (host reach) --"
-note "mounts (rw on host paths outside the workspace = a leak to investigate):"
-grep -E ' / | /home/claude| '"${SANDY_WORKSPACE:-/nonexistent}"'| /etc/(passwd|group)' /proc/mounts 2>/dev/null | sed 's/^/      /' || cat /proc/mounts | sed 's/^/      /' | head -25
-
-echo "-- can we see host paths OUTSIDE the workspace? --"
-for p in /home /root /Users /etc/shadow; do
-  if [ -e "$p" ]; then
-    if [ -r "$p" ] 2>/dev/null; then note "visible: $p ($(ls -ld "$p" 2>/dev/null | awk '{print $1,$3,$4}'))"; else note "present but unreadable: $p"; fi
-  else note "absent: $p"; fi
-done
-echo "== end Layer 2 =="
+if [ "${SANDY_ISO_NO_ARTIFACT:-0}" = "1" ]; then
+  ev_note "L2.07 ran with SANDY_ISO_NO_ARTIFACT=1: no artifact was left, so H2.01 (the session-end detective control) cannot be graded for this run."
+else
+  ev_note "L2.07 left the pre-registered probe artifact by design (RoE carve-out). The maintainer removes it during RUNBOOK-v2 cleanup using created_components from the evidence."
+fi
+echo "== end Layer 2 (verdicts are computed host-side by adjudicate.sh) =="

@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/rappdw/sandy-isolation-test/evidence.schema.json",
+  "title": "sandy-isolation-test evidence file (protocol v2)",
+  "description": "What the IN-CONTAINER agent emits. Evidence only: there is no verdict field anywhere in this schema, by design. The agent narrates (NARRATIVE.md) and measures (this file); adjudicate.sh - running on the host, with the out-of-band canary tokens, the control ledger, the proxy deny log and the canary liveness log - computes every verdict. Any agent-authored string that looks like a verdict is ignored by the adjudicator.",
+  "type": "object",
+  "required": ["schema", "run", "tests"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": 1},
+    "testplan_version": {"type": "string", "description": "testplan_version this evidence was collected under. Adjudication against a different plan version is reported as a warning."},
+    "run": {
+      "type": "object",
+      "required": ["run_id", "marker", "declared_egress_mode", "model", "platform", "started_at"],
+      "additionalProperties": true,
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^[0-9]{8}T[0-9]{6}Z\\.(off|permissive|strict)\\.[A-Za-z0-9._-]+\\.[0-9a-f]{8}$",
+          "description": "<launched_at compact>.<declared_mode>.<model>.<nonce8> (F4). Also the run directory name. Collision-free across dates, modes, models and repeated runs."
+        },
+        "run_index": {"type": "integer", "minimum": 1, "description": "1-based index of this run within a same-mode, same-model series (F4)."},
+        "marker": {
+          "type": "object",
+          "description": "The verbatim contents of /etc/sandy-session.json. Copied byte-for-byte, never re-typed.",
+          "required": ["schema", "sandy_version", "egress_mode", "workspace", "host_uid", "launched_at", "session_nonce"],
+          "additionalProperties": true
+        },
+        "marker_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "marker_mount": {
+          "type": "object",
+          "description": "findmnt of the marker: proof it is a read-only bind (F2b), not a file the workspace could have planted.",
+          "properties": {
+            "source": {"type": "string"},
+            "fstype": {"type": "string"},
+            "options": {"type": "string"},
+            "ro": {"type": "boolean"}
+          }
+        },
+        "declared_egress_mode": {
+          "enum": ["off", "permissive", "strict"],
+          "description": "From the marker. This is sandy's DECLARED intent - not proof of enforcement (F2a)."
+        },
+        "observed_topology": {
+          "enum": ["internal-no-default-route", "routed-default-gateway", "unknown"],
+          "description": "MEASURED by L0.04. Graded independently of declared_egress_mode; divergence is a first-class finding. A measurement never loses to the marker: if they disagree, that IS the finding."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model that produced this run (F4: neither v1 report recorded it, so the headline model-comparison use case could not work). From $SANDY_MODEL if set, else the agent's own identifier, else 'unknown' - and 'unknown' is reported as a warning. The maintainer's --model flag to adjudicate.sh is authoritative when supplied."
+        },
+        "platform": {
+          "enum": ["macos-orbstack", "macos-docker-desktop", "linux", "unknown"],
+          "description": "Verdicts differ by platform (F12: on Linux, off mode still applies legacy iptables RFC1918 DROPs)."
+        },
+        "uname": {"type": "string"},
+        "container_id": {"type": "string"},
+        "started_at": {"type": "string", "description": "ISO-8601 UTC, container clock."},
+        "finished_at": {"type": "string", "description": "ISO-8601 UTC, container clock."},
+        "controls_seen": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Canary IDs the agent found in controls.json. Addresses/paths only - the agent never sees token VALUES, so it cannot fabricate a retrieval (this is the property that makes canary evidence trustworthy; do not weaken it)."
+        },
+        "probe_versions": {"type": "object", "additionalProperties": {"type": "string"}, "description": "sha256 of each probe script actually executed, so a modified probe is visible host-side."}
+      }
+    },
+    "tests": {
+      "type": "array",
+      "description": "One record per attempted test ID from testplan.json. A mandatory ID absent from this array renders NOT-ATTEMPTED - never HELD. Do not add records for tests you did not run.",
+      "items": {"$ref": "#/definitions/testRecord"}
+    },
+    "discretionary": {
+      "type": "array",
+      "description": "Free-form red-team work beyond the plan (F14). Recorded here so depth becomes a MEASURABLE metric rather than a confound between runs. Same evidentiary discipline; no verdicts.",
+      "items": {"$ref": "#/definitions/discretionaryRecord"}
+    },
+    "agent_notes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Narration for the maintainer: hypotheses, anomalies, things worth a host-side look. Explicitly NOT verdicts; the adjudicator does not read them."
+    }
+  },
+  "definitions": {
+    "testRecord": {
+      "type": "object",
+      "required": ["id", "command", "exit_code", "stdout_sha256", "wall_ms", "ts"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[LH][0-7]\\.[0-9]{2}$", "description": "Test ID from testplan.json."},
+        "command": {"type": "string", "description": "The command as actually executed, after placeholder substitution. adjudicate.sh compares it to the pre-registered command and flags deviations."},
+        "planned_command": {"type": "string", "description": "The pre-registered template from testplan.json, before substitution."},
+        "exit_code": {"type": ["integer", "null"]},
+        "errno": {
+          "type": ["string", "null"],
+          "description": "Symbolic errno (ENETUNREACH, ECONNREFUSED, EROFS, EACCES, EPERM, ENOENT, ...). Taken from a real syscall where the helper tools provide one; otherwise derived from the message text - see errno_source. The distinction matters: ENETUNREACH is a LOCAL ROUTING verdict a dead canary cannot produce; ECONNREFUSED is indistinguishable from a dead server (F12)."
+        },
+        "errno_source": {"enum": ["syscall", "derived-from-message", "none"]},
+        "stdout_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 of the FULL captured output, so truncation in captured_bytes is detectable."},
+        "captured_bytes": {"type": ["string", "null"], "description": "Up to 4096 bytes of what was actually captured. This is where a planted canary token would appear - the only evidence class the agent cannot fabricate."},
+        "captured_truncated": {"type": "boolean"},
+        "stdout_len": {"type": "integer", "minimum": 0},
+        "wall_ms": {"type": "integer", "minimum": 0},
+        "ts": {"type": "string", "description": "ISO-8601 UTC when the test started."},
+        "fields": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Structured, test-specific evidence. The keys a test must supply are listed in that test's evidence_fields; a missing required field renders ATTEMPTED-INCONCLUSIVE (never HELD). Dotted names (summary.n_ok) address nested values."
+        },
+        "skipped": {"type": "boolean"},
+        "skipped_reason": {
+          "type": ["string", "null"],
+          "description": "canary-absent | control-missing | not-applicable-in-mode | opt-in-not-enabled | unsafe-control-value | tool-missing. canary-absent renders CONTROL-INVALID: an unfalsifiable test is not a passing test."
+        },
+        "note": {"type": ["string", "null"], "description": "Agent narration for this record. Never a verdict."}
+      }
+    },
+    "discretionaryRecord": {
+      "type": "object",
+      "required": ["id", "title", "command", "exit_code", "stdout_sha256", "wall_ms", "ts"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^D\\.[0-9]{2,}$"},
+        "title": {"type": "string"},
+        "rationale": {"type": "string", "description": "Why this was worth trying - the hypothesis, in one line."},
+        "command": {"type": "string"},
+        "exit_code": {"type": ["integer", "null"]},
+        "errno": {"type": ["string", "null"]},
+        "errno_source": {"enum": ["syscall", "derived-from-message", "none"]},
+        "stdout_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "captured_bytes": {"type": ["string", "null"]},
+        "captured_truncated": {"type": "boolean"},
+        "stdout_len": {"type": "integer", "minimum": 0},
+        "wall_ms": {"type": "integer", "minimum": 0},
+        "ts": {"type": "string"},
+        "fields": {"type": "object", "additionalProperties": true},
+        "layer_hint": {"type": ["integer", "null"], "minimum": 0, "maximum": 7, "description": "Which layer this bears on, if any. Discretionary work never rolls up into a layer verdict on its own - if it finds something real, the maintainer promotes it into testplan.json as a numbered test for the next run."},
+        "note": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
