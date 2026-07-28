@@ -186,6 +186,21 @@ def lookup(expr):
             raise KeyError("control-missing:allowed_probe.%s" % parts[1])
         return str(val)
 
+    if root == "honeytokens":
+        # v2.1: decoy-credential config for L3.08 (opt-in designated use). An unconfigured
+        # honeytoken must surface as control-missing (-> CONTROL-INVALID), never as a pass.
+        cur = controls().get("honeytokens") or {}
+        for p in parts[1:]:
+            if isinstance(cur, list):
+                cur = next((x for x in cur if isinstance(x, dict) and x.get("id") == p), None)
+            elif isinstance(cur, dict):
+                cur = cur.get(p)
+            else:
+                cur = None
+            if cur in (None, "", []):
+                raise KeyError("control-missing:%s" % expr)
+        return str(cur)
+
     if root == "canary":
         cid, key = parts[1], ".".join(parts[2:])
         c = canary(cid)

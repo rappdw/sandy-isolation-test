@@ -19,7 +19,7 @@ if [ -z "${SANDY_ISO_RUNDIR:-}" ] || [ ! -f "${SANDY_ISO_RUNDIR}/run.json" ]; th
   export SANDY_ISO_RUNDIR
 fi
 
-for p in network.sh filesystem.sh credentials.sh privilege.sh config_instance.sh; do
+for p in network.sh network_proxy.sh filesystem.sh persistence.sh credentials.sh privilege.sh config_instance.sh; do
   echo
   bash "$HERE/$p" || echo "run_all.sh: $p exited non-zero (continuing; missing IDs render NOT-ATTEMPTED)" >&2
 done

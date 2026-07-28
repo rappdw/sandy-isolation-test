@@ -84,11 +84,16 @@ EV_PROBE_NAME="preflight.sh"
 . "$HERE/_evidence.sh"
 ev_boot || fail "could not initialise the evidence run directory"
 
+# v2.1: L0.06 (Adversary D) inventories the authority this session HOLDS; _htx.py prints
+# a FIELDS block. Ungraded measurement - it names what no single layer's HELD contradicts.
+ev_parse_L0_06() { awk '/^--- L0.06 FIELDS ---$/{f=1;next} f&&/^[a-z_0-9]+=/{print}' "$1"; }
+
 ev_planned L0.01
 ev_planned L0.02
 ev_planned L0.03
 ev_planned L0.04
 ev_planned L0.05
+ev_planned L0.06     # authority & consequence inventory (Adversary D; nothing exercised)
 
 cat <<EOF
 

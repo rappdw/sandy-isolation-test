@@ -17,6 +17,9 @@ EV_PROBE_NAME="network.sh"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_evidence.sh"
 ev_boot || exit 1
 
+# v2.1: L1.15's expanded model-API-control-channel probe (_htx.py) prints a FIELDS block.
+ev_parse_L1_15() { awk '/^--- L1.15 FIELDS ---$/{f=1;next} f&&/^[a-z_0-9]+=/{print}' "$1"; }
+
 echo "== Layer 1: network egress (declared mode: ${EV_MODE}) =="
 ev_planned L1.01     # name resolution map
 ev_planned L1.02     # allowed-host control (from controls.json, not hardcoded)

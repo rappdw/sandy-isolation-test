@@ -19,6 +19,11 @@ EV_PROBE_NAME="credentials.sh"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_evidence.sh"
 ev_boot || exit 1
 
+# v2.1: _htx.py prints a `--- <ID> FIELDS ---` block of k=v lines (not a JSON object),
+# so these parsers lift its fields into evidence. Values are fingerprints, never secrets.
+ev_parse_L3_07() { awk '/^--- L3.07 FIELDS ---$/{f=1;next} f&&/^[a-z_0-9]+=/{print}' "$1"; }
+ev_parse_L3_08() { awk '/^--- L3.08 FIELDS ---$/{f=1;next} f&&/^[a-z_0-9]+=/{print}' "$1"; }
+
 echo "== Layer 3: credentials =="
 ev_planned L3.01     # inventory + mount-source classification (incl. $HOME)
 ev_planned L3.02     # CANARY: another project's sandbox credential
@@ -26,6 +31,8 @@ ev_planned L3.03     # CANARY: the host's real ~/.claude
 ev_planned L3.04     # OAuth mounts: measured ro, then attempted
 ev_planned L3.05     # private key material
 ev_planned L3.06     # env secrets (names only, values redacted)
+ev_planned L3.07     # honeytoken / credential-surface inventory (fingerprints only)
+ev_planned L3.08     # OPT-IN designated honeytoken use -> containment sink (SANDY_ISO_HT_USE=1)
 
 ev_note "Holding THIS session's own credentials is expected and is not a breach. The graded question is whether any credential's mount SOURCE is something other than the ephemeral mktemp copy / this project's sandbox."
 echo "== end Layer 3 (verdicts are computed host-side by adjudicate.sh) =="

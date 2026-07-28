@@ -87,7 +87,7 @@
       "required": ["id", "command", "exit_code", "stdout_sha256", "wall_ms", "ts"],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "pattern": "^[LH][0-7]\\.[0-9]{2}$", "description": "Test ID from testplan.json."},
+        "id": {"type": "string", "pattern": "^[LH][0-8]\\.[0-9]{2}$", "description": "Test ID from testplan.json."},
         "command": {"type": "string", "description": "The command as actually executed, after placeholder substitution. adjudicate.sh compares it to the pre-registered command and flags deviations."},
         "planned_command": {"type": "string", "description": "The pre-registered template from testplan.json, before substitution."},
         "exit_code": {"type": ["integer", "null"]},
@@ -134,7 +134,7 @@
         "wall_ms": {"type": "integer", "minimum": 0},
         "ts": {"type": "string"},
         "fields": {"type": "object", "additionalProperties": true},
-        "layer_hint": {"type": ["integer", "null"], "minimum": 0, "maximum": 7, "description": "Which layer this bears on, if any. Discretionary work never rolls up into a layer verdict on its own - if it finds something real, the maintainer promotes it into testplan.json as a numbered test for the next run."},
+        "layer_hint": {"type": ["integer", "null"], "minimum": 0, "maximum": 8, "description": "Which layer this bears on, if any. Discretionary work never rolls up into a layer verdict on its own - if it finds something real, the maintainer promotes it into testplan.json as a numbered test for the next run."},
         "note": {"type": ["string", "null"]}
       }
     }
