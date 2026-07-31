@@ -25,3 +25,4 @@ targets.json
 controls.json
 reports/runs/
 .sandy-iso/
+host/setup.conf

@@ -465,7 +465,7 @@ ARTIFACT_BODY = """# sandy-isolation-test :: pre-registered probe artifact
 # of engagement forbid leaving evidence.
 #
 # The maintainer deletes this file (and any directory component listed in the run's
-# evidence as `created_components`) during RUNBOOK-v2 cleanup.
+# evidence as `created_components`) during RUNBOOK §6 cleanup.
 name: sandy-isolation-probe-{nonce}
 """
 

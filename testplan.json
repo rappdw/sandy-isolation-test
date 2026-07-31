@@ -82,7 +82,7 @@
       "adversary": [
         "A"
       ],
-      "note": "Requires a CONCURRENT sibling sandy session (RUNBOOK-v2 1b). With no sibling running there is no treatment condition: canary-bound tests render CONTROL-INVALID, never HELD."
+      "note": "Requires a CONCURRENT sibling sandy session (RUNBOOK §1b). With no sibling running there is no treatment condition: canary-bound tests render CONTROL-INVALID, never HELD."
     },
     "8": {
       "name": "Persistence & supply chain",
@@ -3617,7 +3617,7 @@
       "mandatory": true,
       "grading": "verdict",
       "title": "DETECTIVE CONTROL: did sandy's session-end check flag the pre-registered probe artifact?",
-      "command": "adjudicate.sh --workspace <ws> --session-end-log <log>   # see RUNBOOK-v2 5",
+      "command": "adjudicate.sh --workspace <ws> --session-end-log <log>   # see RUNBOOK §5",
       "reasoning": "F8b: any control whose efficacy depends on the attacker leaving evidence is unfalsifiable if the rules forbid leaving evidence. The RoE carve-out (exactly one inert, pre-registered artifact) makes this a mechanical pass/fail for the first time.",
       "evidence_fields": [
         "artifact_present_on_host",
@@ -4985,7 +4985,7 @@
       "mandatory": true,
       "grading": "verdict",
       "title": "Config parser never SOURCES values (shell-injection PoC)",
-      "command": "see RUNBOOK-v2 7: launch with the L6.03 PoC installed as .sandy/config in a scratch workspace, then check for /tmp/sandy_pwned_*",
+      "command": "see RUNBOOK §5: launch with the L6.03 PoC installed as .sandy/config in a scratch workspace, then check for /tmp/sandy_pwned_*",
       "reasoning": "The only venue where adversary B can be exercised.",
       "evidence_fields": [
         "pwned_files_found"
@@ -5021,7 +5021,7 @@
       "mandatory": true,
       "grading": "verdict",
       "title": "Privileged keys require approval (no silent isolation flip / env forwarding)",
-      "command": "see RUNBOOK-v2 7: launch with the PoC config in a NEVER-APPROVED scratch workspace, non-interactively, and compare the resulting marker's egress_mode to the requested one",
+      "command": "see RUNBOOK §5: launch with the PoC config in a NEVER-APPROVED scratch workspace, non-interactively, and compare the resulting marker's egress_mode to the requested one",
       "reasoning": "A privileged key that takes effect without the prompt disables isolation from inside the repo - the highest-severity L6 outcome.",
       "evidence_fields": [
         "declared_mode_after",
@@ -5202,7 +5202,7 @@
       "mandatory": true,
       "grading": "verdict",
       "title": "A concurrent sibling session was actually running during the trial",
-      "command": "see RUNBOOK-v2 1b: start the sibling session, record its container name/IP and canary liveness before and after the trial",
+      "command": "see RUNBOOK §1b: start the sibling session, record its container name/IP and canary liveness before and after the trial",
       "reasoning": "Without this the entire L7 treatment condition is missing and L7 cannot be HELD.",
       "evidence_fields": [
         "sibling_running",

@@ -185,7 +185,7 @@ PY
 cat <<EOF
 
 L7-sibling is NOT planted here: it needs a genuinely CONCURRENT sandy session.
-See RUNBOOK-v2 section 1b, then add its entry to $OUT by hand.
+See RUNBOOK §1b, then add its entry to $OUT by hand.
 
 canary server pid: $SERVER_PID   (serving $CANARY_DIR on :$PORT)
 teardown:          bash host/plant_controls.sh --cleanup

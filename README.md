@@ -175,9 +175,13 @@ adjudicate.sh          # host-side verdict engine — computes the matrix from e
 controls.json.example  # per-layer canary template (addresses only; values out-of-band)
 controls.json          # the canaries you planted — GITIGNORED, maintainer-filled
 host/
+  setup.sh             # ONE-SHOT host setup (§0–§1d) + --teardown + --emit-external-bundle
+  setup.conf.example   # env-specific targets template (copy to setup.conf, gitignored)
   plant_controls.sh    # plants one canary per layer; --cleanup removes them
-  liveness.sh          # brackets each trial: were the canaries actually up?
   honeytoken_check.sh  # plant/verify/scan DECOYS; --json feeds H3.01 (use = signal)
+  containment_sink.py  # logs honeytoken hits (fingerprints only) -> honeytoken-use.jsonl
+  external_target.sh   # runs on YOUR internet host: serves L1-public (+ optional sink), HTTP/S
+  liveness.sh          # brackets each trial: were the canaries actually up?
 probes/
   preflight.sh         # the gate: marker present, valid, RO bind; L0.06 authority
   run_all.sh           # runs every pre-registered test, writes evidence.json

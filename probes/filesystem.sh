@@ -39,6 +39,6 @@ ev_planned L2.11     # /etc/passwd and /etc/group
 if [ "${SANDY_ISO_NO_ARTIFACT:-0}" = "1" ]; then
   ev_note "L2.07 ran with SANDY_ISO_NO_ARTIFACT=1: no artifact was left, so H2.01 (the session-end detective control) cannot be graded for this run."
 else
-  ev_note "L2.07 left the pre-registered probe artifact by design (RoE carve-out). The maintainer removes it during RUNBOOK-v2 cleanup using created_components from the evidence."
+  ev_note "L2.07 left the pre-registered probe artifact by design (RoE carve-out). The maintainer removes it during RUNBOOK §6 cleanup using created_components from the evidence."
 fi
 echo "== end Layer 2 (verdicts are computed host-side by adjudicate.sh) =="
