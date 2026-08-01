@@ -47,7 +47,14 @@ for c in controls.get("canaries", []):
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-            with urllib.request.urlopen(c["url"], timeout=timeout, context=ctx) as fh:
+            # Mirror the in-container probe's User-Agent (network_egress.py) EXACTLY, so
+            # liveness predicts what the =0 fetch will get. Default urllib sends
+            # "Python-urllib/x.y", which a WAF/DSM in front of a public L1-public canary
+            # commonly 403s while letting curl through - a false DOWN that hid a canary the
+            # real probe could reach (or masked one it could not). The canary must answer
+            # THIS client, not just a browser.
+            req = urllib.request.Request(c["url"], headers={"User-Agent": "sandy-isolation-test/2"})
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as fh:
                 body = fh.read(256).decode("utf-8", "replace").strip()
             alive, detail = True, "%d bytes" % len(body)
         except Exception as exc:

@@ -179,6 +179,45 @@ ssh you@<external-host> 'tar xzf external-bundle.tgz && cd external-bundle && ca
 
 Tear down the external side with `bash external_target.sh --stop` on that host.
 
+#### Variant: token as a static file on an EXISTING web server, bridged via an admin host
+
+Common real setup: `PUBLIC_URL` is an existing web server you run (a Synology, an nginx box)
+that the isolation host can only reach **over the public internet** (DNS → your WAN IP → NAT
+hairpin), and the isolation host has **no direct route** to it. Then you don't run
+`external_target.sh` at all — that server already terminates TLS with a real cert, so the
+canary is just a static file. Use a host that reaches **both** sides (your admin host) as a
+courier; the token never touches the workspace:
+
+```sh
+# 1. on the ADMIN host (it can ssh to both the isolation host and the web host):
+TOK=$(ssh <you>@<isolation-host> \
+  "python3 -c \"import json;print(json.load(open('/home/<you>/.sandy-iso/tokens.json'))['L1-public'])\"")
+
+# 2. place it at the path controls.json expects (PUBLIC_URL + /public-token), in the docroot:
+printf '%s\n' "$TOK" | ssh <you>@<web-host> "cat > /volume1/web/<your-vhost>/public-token"
+```
+
+Then — and this is the trap — the canary must answer the **probe's** client, not just a
+browser. The in-container `=0` fetch sends `User-Agent: sandy-isolation-test/2` (a raw
+`network_egress.py` request). A WAF / DSM / reverse proxy that 403s bot user-agents (e.g. the
+default `Python-urllib`) will 403 the probe too, and you get a **false "blocked" that looks
+like sandy holding when your web server did the blocking.** Verify with the probe's own UA,
+from the isolation host, before trusting anything:
+
+```sh
+curl -sS -A "sandy-isolation-test/2" https://<your-vhost>/public-token   # MUST return the token
+bash host/liveness.sh --phase pre                                        # L1-public -> UP
+```
+
+If that `curl` returns `403`/`404`, serve `/public-token` as a **plain static file with no WAF
+or UA filtering** on that path (it's a canary — it must answer whatever client the container
+uses), then re-check. Add the file to your teardown: remove `public-token` from the web host
+when the trials are done.
+
+> Liveness itself sends the probe's `sandy-isolation-test/2` UA (not `Python-urllib`), so
+> `liveness.sh` now predicts the real `=0` outcome instead of tripping on a WAF the container
+> would never have hit.
+
 ## 2. POSITIVE CONTROL — run `=0` FIRST, then record the ledger  ⟵ do not skip
 
 Proves the harness can actually detect a breach, **per vector**.
