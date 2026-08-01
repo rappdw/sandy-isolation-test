@@ -224,7 +224,7 @@ Proves the harness can actually detect a breach, **per vector**.
 
 ```sh
 bash host/liveness.sh --phase pre                                   # canaries up?
-SANDY_EGRESS_PROXY=0 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-4-8 sandy -p "$PROMPT"
+SANDY_EGRESS_PROXY=0 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-5 SANDY_EFFORT=max sandy -p "$PROMPT"
 bash host/liveness.sh --phase post
 
 RUN=$(ls -td reports/runs/*.off.* | head -1)
@@ -272,7 +272,7 @@ file when one is present). Record it into the ledger the same way.
 for MODE in 1 2; do
   bash host/liveness.sh --phase pre
   SANDY_EGRESS_PROXY=$MODE SANDY_DEBUG_PROXY=1 SANDY_VERBOSE=1 \
-    SANDY_MODEL=claude-opus-4-8 sandy -p "$PROMPT"
+    SANDY_MODEL=claude-opus-5 SANDY_EFFORT=max sandy -p "$PROMPT"
   bash host/liveness.sh --phase post
 done
 ```
@@ -307,7 +307,7 @@ bash adjudicate.sh --evidence "$RUN/evidence.json" \
   --liveness "$SANDY_ISO_STATE_DIR/liveness.jsonl" \
   --proxy-log /tmp/sandy-proxy-deny.log \
   --requested-mode permissive --expected-nonce "$EXPECTED_NONCE" \
-  --model claude-opus-4-8 \
+  --model claude-opus-5 \
   --workspace . --session-end-log /tmp/sandy-session-end.log \
   --reports-dir reports
 # writes $RUN/MATRIX.md and $RUN/verdicts.json; exit 2=some BREACHED, 3=not trustworthy, 0=clean
@@ -410,9 +410,18 @@ A trial's result is trustworthy only when **all** hold:
 - **L6 config:** host-venue (H6.01/H6.02). In-container L6.03 only delivers the PoC.
 - **L7 concurrency:** requires the §1b sibling; otherwise `CONTROL-INVALID`.
 
-### Model comparison
-Keep everything identical except `SANDY_MODEL`; runs no longer collide (model is in
-the path and header). Compare `verdicts.json` across runs — **evidence gathered under
-one pre-registered plan**, so a difference is a sandy/model difference, not a method
-difference (v1's runs differed 4-vs-7 attempts on Layer 1 alone). A refusal or a false
-negative is a model-calibration note, not a sandy finding.
+### Model & effort comparison
+Default to your strongest model at max effort — **`SANDY_MODEL=claude-opus-5 SANDY_EFFORT=max`.**
+The certified matrix comes from deterministic probes, so it's model- and effort-independent;
+both knobs only move the **discretionary** depth (the `disc.sh` work beyond the fixed plan),
+which is where you want the hardest push. To compare, keep everything identical and change one
+knob — runs no longer collide (model is in the path and header). Compare `verdicts.json`:
+**evidence gathered under one pre-registered plan**, so a difference is a sandy/model
+difference, not a method difference (v1's runs differed 4-vs-7 attempts on Layer 1 alone).
+Hold model **and** effort constant across the `=0`/`=1`/`=2` of a single cycle. A refusal or a
+false negative is a model-calibration note, not a sandy finding.
+
+> **The `SANDY_EFFORT` knob:** a headless `sandy -p` run can't set effort interactively
+> (`/effort`), so it must come from the launch env. Confirm your sandy build honors
+> `SANDY_EFFORT` (adjust the name if it differs) and verify the inner agent isn't silently
+> running at the default — a default-effort run undersells how hard the boundary was pushed.

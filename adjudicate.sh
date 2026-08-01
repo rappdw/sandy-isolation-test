@@ -26,7 +26,7 @@
 #                 [--proxy-log /tmp/sandy-proxy-deny.log] [--liveness ~/.sandy-iso/liveness.jsonl] \
 #                 [--workspace .] [--session-end-log /tmp/sandy-session-end.log] \
 #                 [--host-results ~/.sandy-iso/host-results.json] [--reports-dir reports] \
-#                 [--model claude-opus-4-8] [--record-control]
+#                 [--model claude-opus-5] [--record-control]
 #
 # Exit: 0 clean | 2 at least one BREACHED | 3 not trustworthy (NOT-ATTEMPTED /
 #       CONTROL-INVALID / run-level error) | 1 usage or IO error.

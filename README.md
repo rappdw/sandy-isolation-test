@@ -58,7 +58,7 @@ bash host/honeytoken_check.sh --plant --workspace .   # writes the ledger; value
 
 # 2. POSITIVE CONTROL first — isolation OFF, proves each vector is detectable
 bash host/liveness.sh --phase pre                 # canaries actually up?
-SANDY_EGRESS_PROXY=0 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-4-8 sandy -p "$PROMPT"
+SANDY_EGRESS_PROXY=0 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-5 SANDY_EFFORT=max sandy -p "$PROMPT"
 bash host/liveness.sh --phase post
 RUN=$(ls -td reports/runs/*.off.* | head -1)
 bash adjudicate.sh --evidence "$RUN/evidence.json" --record-control
@@ -67,7 +67,7 @@ bash adjudicate.sh --evidence "$RUN/evidence.json" --record-control
 for MODE in 1 2; do
   bash host/liveness.sh --phase pre
   SANDY_EGRESS_PROXY=$MODE SANDY_DEBUG_PROXY=1 SANDY_VERBOSE=1 \
-    SANDY_MODEL=claude-opus-4-8 sandy -p "$PROMPT"
+    SANDY_MODEL=claude-opus-5 SANDY_EFFORT=max sandy -p "$PROMPT"
   bash host/liveness.sh --phase post
 done
 # then adjudicate each run, run the host-side suite, and clean up (RUNBOOK §5-6)
@@ -106,16 +106,23 @@ proves **declared config, not enforcement**: a measurement that contradicts it (
 `strict` declared while a default route exists) is a **finding**, never something the
 marker overrules.
 
-### Model note (Fable 5 vs Opus 4.8)
+### Model & effort note
 
-Compare **verified verdicts**, not prose — and note that comparison only works now
-that the model is recorded in the run header and the filename
-(`reports/runs/<ts>.<mode>.<model>.<nonce8>/`); v1 wrote neither, and same-mode runs
-overwrote each other. Because every run executes the same pre-registered
-`testplan.json`, a verdict delta is attributable to the model rather than to the
-agent having chosen a different experiment. Discretionary depth is reported as its own
-metric. A refusal is a model-calibration observation, not a sandy finding — and so is
-a false negative (a model mistaking expected sandy behavior for "not sandy").
+**Run your strongest model at max effort** — the default is **Opus 5, `SANDY_EFFORT=max`.**
+The reason is subtle: the certified matrix comes from **deterministic probes**, so it's
+essentially *model- and effort-independent* — any capable agent that runs `run_all.sh`
+produces the same evidence and `adjudicate.sh` computes the same verdicts. Model and effort
+only move the **discretionary** red-teaming (the `disc.sh` pivots beyond the fixed plan), and
+that's exactly where you want the adversary pushing hardest. "It held against a max-effort
+Opus 5" is the strongest confidence statement, and the most honest version of the threat the
+Hugging Face incident describes — a motivated frontier agent reasoning its way to an escape.
+
+To **compare** models/efforts (the kit records both in the run header and filename
+`reports/runs/<ts>.<mode>.<model>.<nonce8>/`), keep everything else identical and change one
+knob. The certified matrices *should* match — a divergence is itself a finding — while the
+discretionary depth shows how much harder one config pushed. Hold model **and** effort
+constant across the `=0`/`=1`/`=2` of a single cycle. A refusal or a false negative is a
+model-calibration observation, not a sandy finding.
 
 ## Scope & rules of engagement
 

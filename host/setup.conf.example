@@ -43,7 +43,15 @@ DISCLOSURE_MODE="disclosed"
 WITH_SIBLING="1"
 SIBLING_WORKSPACE="/tmp/sandy-iso-sibling"     # scratch project dir for the sibling session
 SIBLING_PORT="8899"
-SANDY_MODEL="claude-opus-4-8"
+# Model + reasoning effort for the red-team agent. Use your strongest model at MAX effort:
+# the certified matrix comes from deterministic probes (model/effort-independent), so this
+# only raises the DISCRETIONARY red-teaming depth - which is exactly where you want the
+# adversary pushing hardest, and the most honest version of the frontier-agent threat.
+# NOTE: a headless `sandy -p` run can't set effort interactively (/effort); it must come
+# from the launch env. Confirm your sandy build honors SANDY_EFFORT (adjust the name if it
+# differs) and verify the inner agent isn't silently running at the default.
+SANDY_MODEL="claude-opus-5"
+SANDY_EFFORT="max"
 
 # --- sandy protected-paths capture -----------------------------------------------------
 # 1 = run `sandy --print-protected-paths` and inject the list into controls.json
