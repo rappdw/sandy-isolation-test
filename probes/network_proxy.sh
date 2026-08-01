@@ -40,35 +40,12 @@ fi
 #     the recorded command matches the pre-registered one in both locations.
 export SANDY_ISO_PROXY_PROBE="$SELF/proxy_probe.py"
 
-# --- ensure L1.16-L1.25 are resolvable. If the tracked plan does not yet carry them
-#     (pre-integration), merge in the sibling fragment.json into a TEMP plan - never the
-#     tracked file.
-if ! python3 "$KIT/probes/_ev.py" resolve L1.16 >/dev/null 2>&1; then
-  FRAG="$SELF/../fragment.json"
-  if [ ! -f "$FRAG" ]; then
-    echo "network_proxy.sh: L1.16 not in testplan.json and fragment.json not found at $FRAG" >&2
-    exit 1
-  fi
-  MERGED="$(mktemp "${TMPDIR:-/tmp}/sandy_testplan_merged.XXXXXX.json")"
-  if ! python3 - "$KIT/testplan.json" "$FRAG" "$MERGED" <<'PY'
-import json, sys
-base = json.load(open(sys.argv[1]))
-frag = json.load(open(sys.argv[2]))
-if isinstance(frag, dict):
-    frag = frag.get("tests", [])
-have = {t.get("id") for t in base.get("tests", [])}
-for t in frag:
-    if t.get("id") not in have:
-        base["tests"].append(t)
-json.dump(base, open(sys.argv[3], "w"))
-PY
-  then
-    echo "network_proxy.sh: failed to assemble merged plan" >&2
-    exit 1
-  fi
-  export SANDY_ISO_TESTPLAN="$MERGED"
-  echo "# note: L1.16-L1.25 not yet in testplan.json; using merged plan $MERGED (fragment.json)"
-fi
+# L1.16-L1.25 + H1.01 are integrated into testplan.json (v2.1); they resolve like every
+# other test, so this runner just sources the evidence plumbing and calls ev_planned.
+# (v2.1.x carried a pre-integration `fragment.json` self-merge here that ran BEFORE ev_boot's
+#  cd and mis-fired when the plan couldn't be found relative to the container's cwd - it then
+#  exited non-zero and rendered all of L1.16-L1.25 NOT-ATTEMPTED. Removed: ev_boot below sets
+#  the kit dir; a control-missing test now SKIPs gracefully instead of crashing the probe.)
 
 # shellcheck source=/dev/null
 . "$KIT/probes/_evidence.sh"
