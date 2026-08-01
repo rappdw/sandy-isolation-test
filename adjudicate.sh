@@ -131,13 +131,27 @@ PROXY_LOG = opt("--proxy-log", _exists(os.environ.get("SANDY_DEBUG_PROXY_LOG",
 SESSION_END_LOG = opt("--session-end-log")
 WORKSPACE = opt("--workspace", "." if RUNDIR else None)
 REPORTS_DIR = opt("--reports-dir")
-# --requested-mode and --expected-nonce are DELIBERATELY NOT auto-derived from the run dir: the
-# run dir and evidence.json are written by the in-container agent, so taking these from there
-# would make the requested-vs-declared cross-check (F2a) and the nonce identity check (F2c)
-# self-certifying. They must come from YOUR launch (SANDY_EGRESS_PROXY / the SANDY_VERBOSE
-# banner). Absent -> the existing warnings fire.
-REQUESTED_MODE = opt("--requested-mode")
-EXPECTED_NONCE = opt("--expected-nonce")
+# --requested-mode and --expected-nonce are NOT taken from the agent-written run dir / evidence
+# (that would make the F2a and F2c checks self-certifying). They come from the HOST-side run
+# manifest that host/run.sh wrote at launch - independent of the agent - keyed by this run's
+# nonce8. If host/run.sh wasn't used (or sandy didn't honor SANDY_SESSION_NONCE, so the run's
+# nonce8 isn't in the manifest), nothing is auto-filled and the existing warnings fire: never a
+# silent pass. Explicit flags always override.
+_manifest = {}
+_n8 = (((EV.get("run") or {}).get("marker") or {}).get("session_nonce") or "")[:8]
+if _n8:
+    try:
+        for _line in open(os.path.join(STATE, "runs.jsonl")):
+            _line = _line.strip()
+            if _line and json.loads(_line).get("nonce8") == _n8:
+                _manifest = json.loads(_line)   # last matching entry wins
+    except (OSError, ValueError):
+        pass
+REQUESTED_MODE = opt("--requested-mode") or _manifest.get("requested_mode")
+EXPECTED_NONCE = opt("--expected-nonce") or _manifest.get("expected_nonce")
+if _manifest and not (opt("--requested-mode") and opt("--expected-nonce")):
+    sys.stderr.write("adjudicate: requested-mode=%s + expected-nonce auto-verified from the "
+                     "host run manifest (nonce8=%s)\n" % (_manifest.get("requested_mode"), _n8))
 HOST_MODEL = opt("--model")
 RECORD_CONTROL = flag("--record-control")
 OUT_MD = opt("--out-md")

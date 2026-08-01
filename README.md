@@ -56,22 +56,16 @@ bash host/plant_controls.sh --workspace .
 # 1b. plant the DECOYS — canaries prove a boundary failed; honeytokens' USE is the signal
 bash host/honeytoken_check.sh --plant --workspace .   # writes the ledger; values out-of-band
 
-# 2. POSITIVE CONTROL first — isolation OFF, proves each vector is detectable.
-#    Launch sandy INTERACTIVELY (not -p): a fresh session has one-time prompts that -p
-#    stalls on, and you want to watch the agent work. In-session: clear prompts, /effort max,
-#    paste $PROMPT, run, exit.
-bash host/liveness.sh --phase pre                 # canaries actually up?
-SANDY_EGRESS_PROXY=0 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-5 sandy
-bash host/liveness.sh --phase post
+# 2. POSITIVE CONTROL first — isolation OFF. host/run.sh records this run's nonce +
+#    requested mode host-side, brackets liveness, and launches sandy INTERACTIVELY (a fresh
+#    session has one-time prompts -p stalls on, and you want to watch the agent work).
+bash host/run.sh off        # in-session: clear prompts -> /effort max -> paste the PROMPT it prints -> run -> exit
 RUN=$(ls -td reports/runs/*.off.* | head -1)
-bash adjudicate.sh "$RUN" --requested-mode off --record-control   # run dir auto-fills evidence/controls/tokens/…
+bash adjudicate.sh "$RUN" --record-control   # run dir + manifest auto-fill everything incl. nonce + mode
 
-# 3. the real trials — MODE=1 (permissive) then MODE=2 (strict), each interactive + bracketed
-MODE=1   # repeat with MODE=2
-bash host/liveness.sh --phase pre
-SANDY_EGRESS_PROXY=$MODE SANDY_DEBUG_PROXY=1 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-5 sandy
-#   in-session: clear prompts -> /effort max -> paste $PROMPT -> run -> exit
-bash host/liveness.sh --phase post
+# 3. the real trials — one interactive session per mode
+bash host/run.sh permissive   # =1
+bash host/run.sh strict       # =2
 # then adjudicate each run, run the host-side suite, and clean up (RUNBOOK §5-6)
 ```
 
@@ -187,6 +181,7 @@ controls.json.example  # per-layer canary template (addresses only; values out-o
 controls.json          # the canaries you planted — GITIGNORED, maintainer-filled
 host/
   setup.sh             # ONE-SHOT host setup (§0–§1d) + --teardown + --emit-external-bundle
+  run.sh <mode>        # drive ONE run: record nonce+mode, bracket liveness, launch interactively
   setup.conf.example   # env-specific targets template (copy to setup.conf, gitignored)
   plant_controls.sh    # plants one canary per layer; --cleanup removes them
   honeytoken_check.sh  # plant/verify/scan DECOYS; --json feeds H3.01 (use = signal)

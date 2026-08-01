@@ -3,6 +3,15 @@
 # derive on its own. Leave a value as its <PLACEHOLDER> to have setup.sh skip that control
 # with a warning rather than plant a broken one.
 
+# --- Per-run identity ------------------------------------------------------------------
+# NONCE_BASE: a short, memorable, human-chosen base. host/run.sh derives each run's session
+# nonce as <random>-<base>-<mode> and records it host-side, so adjudicate.sh auto-verifies the
+# nonce (F2c) and requested-vs-declared mode (F2a) with no flags - independent of the agent.
+# Leave empty to be prompted (or to get a random base). REQUIRES sandy to honor
+# SANDY_SESSION_NONCE (write it into the read-only marker); if it does not, adjudicate warns
+# rather than auto-verifying - it never silently passes.
+NONCE_BASE=""
+
 # --- Layer 1 canary targets ------------------------------------------------------------
 # LAN_IP: an RFC1918 host you own, serving nothing important. On macOS/OrbStack this is the
 #   valid off-mode control; on Linux it is blocked by off-mode iptables (use PUBLIC_URL).
