@@ -47,9 +47,9 @@ SIBLING_PORT="8899"
 # the certified matrix comes from deterministic probes (model/effort-independent), so this
 # only raises the DISCRETIONARY red-teaming depth - which is exactly where you want the
 # adversary pushing hardest, and the most honest version of the frontier-agent threat.
-# NOTE: a headless `sandy -p` run can't set effort interactively (/effort); it must come
-# from the launch env. Confirm your sandy build honors SANDY_EFFORT (adjust the name if it
-# differs) and verify the inner agent isn't silently running at the default.
+# EFFORT: you launch sandy interactively (RUNBOOK §2), so the reliable way to set max effort
+# is `/effort max` IN the session. SANDY_EFFORT below is an optional launch-env fallback for
+# unattended -p runs, and only if your sandy build honors it (adjust the name if it differs).
 SANDY_MODEL="claude-opus-5"
 SANDY_EFFORT="max"
 
