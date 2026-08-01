@@ -64,7 +64,7 @@ bash host/liveness.sh --phase pre                 # canaries actually up?
 SANDY_EGRESS_PROXY=0 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-5 sandy
 bash host/liveness.sh --phase post
 RUN=$(ls -td reports/runs/*.off.* | head -1)
-bash adjudicate.sh --evidence "$RUN/evidence.json" --record-control
+bash adjudicate.sh "$RUN" --requested-mode off --record-control   # run dir auto-fills evidence/controls/tokens/…
 
 # 3. the real trials — MODE=1 (permissive) then MODE=2 (strict), each interactive + bracketed
 MODE=1   # repeat with MODE=2

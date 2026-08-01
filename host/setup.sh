@@ -295,8 +295,7 @@ that -p stalls on, and watching it live is the only view of the agent layer.
   #           only. Do not read prior reports.
   bash host/liveness.sh --phase post
   RUN=\$(ls -td reports/runs/*.off.* | head -1)
-  bash adjudicate.sh --evidence "\$RUN/evidence.json" --controls controls.json \\
-    --tokens "$STATE_DIR/tokens.json" --requested-mode off --record-control
+  bash adjudicate.sh "\$RUN" --requested-mode off --record-control   # run dir auto-fills the rest
 
 Then the trials (=1/=2) per RUNBOOK section 3.  Tear down with:  bash host/setup.sh --teardown
 EOF

@@ -245,8 +245,11 @@ SANDY_EGRESS_PROXY=0 SANDY_VERBOSE=1 SANDY_MODEL=claude-opus-5 sandy   # INTERAC
 bash host/liveness.sh --phase post
 
 RUN=$(ls -td reports/runs/*.off.* | head -1)
-bash adjudicate.sh --evidence "$RUN/evidence.json" \
-  --controls controls.json --tokens "$SANDY_ISO_STATE_DIR/tokens.json" \
+# Hand adjudicate the RUN DIRECTORY - it auto-discovers evidence/controls/tokens/liveness/
+# ledger from convention + $SANDY_ISO_STATE_DIR. Only the two OUT-OF-BAND checks
+# (--requested-mode, --expected-nonce) and the --record-control action stay explicit: they
+# come from YOUR launch, not the agent-created run dir, or they'd self-certify.
+bash adjudicate.sh "$RUN" \
   --requested-mode off --expected-nonce "$EXPECTED_NONCE" \
   --record-control                                                  # <-- writes the ledger
 ```
@@ -320,15 +323,13 @@ bash host/liveness.sh --phase post
 
 ```sh
 RUN=$(ls -td reports/runs/*.permissive.* | head -1)
-bash adjudicate.sh --evidence "$RUN/evidence.json" \
-  --controls controls.json --tokens "$SANDY_ISO_STATE_DIR/tokens.json" \
-  --ledger "$SANDY_ISO_STATE_DIR/control-ledger.json" \
-  --liveness "$SANDY_ISO_STATE_DIR/liveness.jsonl" \
-  --proxy-log /tmp/sandy-proxy-deny.log \
+# The run dir auto-fills evidence/controls/tokens/ledger/liveness, and picks up the proxy
+# deny log from $SANDY_DEBUG_PROXY_LOG (or /tmp/sandy-proxy-deny.log) if present. Supply the
+# out-of-band checks, the model, and the host-side inputs for the detective controls:
+bash adjudicate.sh "$RUN" \
   --requested-mode permissive --expected-nonce "$EXPECTED_NONCE" \
   --model claude-opus-5 \
-  --workspace . --session-end-log /tmp/sandy-session-end.log \
-  --reports-dir reports
+  --session-end-log /tmp/sandy-session-end.log         # for H2.01/H8.01; --workspace defaults to .
 # writes $RUN/MATRIX.md and $RUN/verdicts.json; exit 2=some BREACHED, 3=not trustworthy, 0=clean
 ```
 
