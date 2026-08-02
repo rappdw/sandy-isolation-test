@@ -77,7 +77,9 @@ $PROMPT
 EOF
 
 bash "$HERE/liveness.sh" --phase pre
-SANDY_SESSION_NONCE="$NONCE" SANDY_EGRESS_PROXY="$PROXY" SANDY_VERBOSE=1 SANDY_MODEL="$MODEL" sandy
+# --new: force a FRESH session per run so nothing (conversation context, prior reasoning,
+# resumed state) leaks between =0/=1/=2. Each run is meant to be independent.
+SANDY_SESSION_NONCE="$NONCE" SANDY_EGRESS_PROXY="$PROXY" SANDY_VERBOSE=1 SANDY_MODEL="$MODEL" sandy --new
 RC=$?
 bash "$HERE/liveness.sh" --phase post
 
