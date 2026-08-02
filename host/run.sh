@@ -24,9 +24,14 @@ STATE_DIR="${SANDY_ISO_STATE_DIR:-$HOME/.sandy-iso}"
 export SANDY_ISO_STATE_DIR="$STATE_DIR"
 
 MODE="${1:-}"
-# In the proxy modes, export SANDY_DEBUG_PROXY so the deny log is written. It must be EXPORTED,
-# not inlined as `$DEBUG sandy` - a var that expands to `NAME=val` is taken as the command name,
-# not an assignment (that was rc=127: "SANDY_DEBUG_PROXY=1: command not found").
+# PROXY selects the egress mode. In the proxy modes we ALSO export SANDY_DEBUG_PROXY=1 - but only
+# for LIVE operator visibility: it echoes a resolver probe at startup and a `docker logs` dump of
+# the proxy at teardown to stderr. It does NOT write the deny-log file (that was a wrong v2.4
+# assumption). sandy ALWAYS writes denied-egress lines to
+# $SANDY_HOME/sandboxes/<project>-<hash>/proxy.log in proxy mode, flag or no flag; we snapshot
+# THAT file into the run dir after the session (see the snapshot block below).
+# (Export, don't inline as `$DEBUG sandy`: a var expanding to `NAME=val` is taken as the command
+# name -> rc=127 "SANDY_DEBUG_PROXY=1: command not found", the v2.4.1 bug.)
 case "$MODE" in
   off)        PROXY=0;;
   permissive) PROXY=1; export SANDY_DEBUG_PROXY=1;;
@@ -106,6 +111,28 @@ RUN="$(ls -td "$KIT"/reports/runs/*."$MODE".* 2>/dev/null | head -1)"
 if [ -n "$RUN" ] && ! printf '%s' "$RUN" | grep -q -- "$NONCE8"; then
   echo "run.sh: WARNING - newest $MODE run dir ($(basename "$RUN")) does not carry nonce8=$NONCE8." >&2
   echo "  Your sandy build may not honor SANDY_SESSION_NONCE; adjudicate will warn rather than auto-verify." >&2
+fi
+
+# --- snapshot the proxy deny log into the run dir (proxy modes only) ---
+# sandy writes denied-egress lines to $SANDY_HOME/sandboxes/<project>-<hash>/proxy.log, ALWAYS in
+# proxy mode (independent of SANDY_DEBUG_PROXY, which only echoes to stderr). That file is
+# TRUNCATED at the next launch, so we capture it NOW - before the next run overwrites it - and
+# store it WITH the run, so adjudicate reads this run's bytes and not a later run's. adjudicate
+# auto-discovers <run>/proxy-deny.log. off mode runs no proxy, so there is no such file (expected;
+# adjudicate does not require one in off mode).
+if [ "$MODE" != off ] && [ -n "$RUN" ]; then
+  SANDY_HOME_DIR="${SANDY_HOME:-$HOME/.sandy}"
+  DIR_BASE="$(basename "$(pwd -P)")"
+  PLOG="$(ls -td "$SANDY_HOME_DIR"/sandboxes/"$DIR_BASE"-*/proxy.log 2>/dev/null | head -1)"
+  if [ -n "$PLOG" ] && [ -f "$PLOG" ]; then
+    cp "$PLOG" "$RUN/proxy-deny.log"
+    LINES="$(wc -l < "$RUN/proxy-deny.log" | tr -d ' ')"
+    echo "run.sh: snapshotted proxy deny log ($PLOG) -> $RUN/proxy-deny.log ($LINES lines)"
+    [ -s "$RUN/proxy-deny.log" ] || echo "run.sh: WARNING - the proxy deny log is EMPTY; adjudicate will downgrade Layer-1 HELDs (no independent record of what the agent attempted)." >&2
+  else
+    echo "run.sh: WARNING - no proxy.log under $SANDY_HOME_DIR/sandboxes/$DIR_BASE-*/ for this $MODE run." >&2
+    echo "  adjudicate cannot corroborate Layer 1 (set SANDY_HOME if your sandbox tree lives elsewhere)." >&2
+  fi
 fi
 
 cat <<EOF

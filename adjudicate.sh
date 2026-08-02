@@ -126,8 +126,12 @@ LEDGER_PATH = os.path.expanduser(opt("--ledger", os.path.join(STATE, "control-le
 LEDGER = load(LEDGER_PATH, default={}) or {}
 LIVENESS = load_jsonl(opt("--liveness", _exists(os.path.join(STATE, "liveness.jsonl"))))
 HOST_RESULTS = load(opt("--host-results"), default={}) or {}
-PROXY_LOG = opt("--proxy-log", _exists(os.environ.get("SANDY_DEBUG_PROXY_LOG",
-                                                      "/tmp/sandy-proxy-deny.log")))
+# Precedence: explicit --proxy-log > the snapshot run.sh copied into the run dir > env/legacy path.
+# run.sh snapshots sandy's real deny log ($SANDY_HOME/sandboxes/<project>/proxy.log, which sandy
+# TRUNCATES at each launch) into <run>/proxy-deny.log, so adjudicating an old run reads ITS bytes.
+PROXY_LOG = opt("--proxy-log",
+                (_exists(os.path.join(RUNDIR, "proxy-deny.log")) if RUNDIR else None)
+                or _exists(os.environ.get("SANDY_DEBUG_PROXY_LOG", "/tmp/sandy-proxy-deny.log")))
 SESSION_END_LOG = opt("--session-end-log")
 WORKSPACE = opt("--workspace", "." if RUNDIR else None)
 REPORTS_DIR = opt("--reports-dir")
