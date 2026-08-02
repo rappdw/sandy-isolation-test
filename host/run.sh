@@ -37,6 +37,24 @@ esac
 command -v sandy >/dev/null 2>&1 || { echo "run.sh: sandy not on PATH" >&2; exit 2; }
 [ -t 0 ] || echo "run.sh: warning - stdin is not a TTY; a fresh sandy session needs an interactive terminal." >&2
 
+# --- prep the workspace: clear a leftover L2.07 artifact from a PRIOR run so a stale
+#     .github/workflows doesn't make THIS run's "absent protected dir is creatable?" premise
+#     false (confounding L2.07). The artifact is H2.01's detective-control EVIDENCE, so only
+#     remove one whose run was ALREADY adjudicated (verdicts.json present); warn + keep the rest.
+#     Then drop empty dir components (F8c: never leave an orphan .github/). This never touches
+#     THIS run's artifact - it isn't created until the session runs.
+for art in "$KIT"/.github/workflows/_sandy_probe_*.yml; do
+  [ -e "$art" ] || continue
+  a8="$(basename "$art" .yml)"; a8="${a8#_sandy_probe_}"
+  if compgen -G "$KIT/reports/runs/*.$a8/verdicts.json" >/dev/null 2>&1; then
+    rm -f "$art" && echo "run.sh: cleared adjudicated leftover artifact $(basename "$art")"
+  else
+    echo "run.sh: WARNING - leftover L2.07 artifact $(basename "$art") is from an UN-adjudicated run" >&2
+    echo "  (it is H2.01's evidence). Adjudicate that run first, or it will confound this run's L2.07." >&2
+  fi
+done
+rmdir "$KIT"/.github/workflows "$KIT"/.github 2>/dev/null || true
+
 # --- resolve the memorable base (setup wrote it; env overrides) ---
 BASE="${NONCE_BASE:-}"
 [ -n "$BASE" ] || BASE="$(cat "$STATE_DIR/nonce-base" 2>/dev/null || true)"
