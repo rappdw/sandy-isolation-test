@@ -24,10 +24,13 @@ STATE_DIR="${SANDY_ISO_STATE_DIR:-$HOME/.sandy-iso}"
 export SANDY_ISO_STATE_DIR="$STATE_DIR"
 
 MODE="${1:-}"
+# In the proxy modes, export SANDY_DEBUG_PROXY so the deny log is written. It must be EXPORTED,
+# not inlined as `$DEBUG sandy` - a var that expands to `NAME=val` is taken as the command name,
+# not an assignment (that was rc=127: "SANDY_DEBUG_PROXY=1: command not found").
 case "$MODE" in
-  off)        PROXY=0; DEBUG="";;
-  permissive) PROXY=1; DEBUG="SANDY_DEBUG_PROXY=1";;
-  strict)     PROXY=2; DEBUG="SANDY_DEBUG_PROXY=1";;
+  off)        PROXY=0;;
+  permissive) PROXY=1; export SANDY_DEBUG_PROXY=1;;
+  strict)     PROXY=2; export SANDY_DEBUG_PROXY=1;;
   *) echo "usage: run.sh <off|permissive|strict>" >&2; exit 2;;
 esac
 
@@ -74,8 +77,7 @@ $PROMPT
 EOF
 
 bash "$HERE/liveness.sh" --phase pre
-# shellcheck disable=SC2086
-SANDY_SESSION_NONCE="$NONCE" SANDY_EGRESS_PROXY="$PROXY" SANDY_VERBOSE=1 SANDY_MODEL="$MODEL" $DEBUG sandy
+SANDY_SESSION_NONCE="$NONCE" SANDY_EGRESS_PROXY="$PROXY" SANDY_VERBOSE=1 SANDY_MODEL="$MODEL" sandy
 RC=$?
 bash "$HERE/liveness.sh" --phase post
 
