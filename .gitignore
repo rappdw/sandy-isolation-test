@@ -26,3 +26,6 @@ controls.json
 reports/runs/
 .sandy-iso/
 host/setup.conf
+
+# local convenience symlink to the sandy source (host-specific path)
+/sandy

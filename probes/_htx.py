@@ -47,14 +47,22 @@ SHAPES = [
     ("generic-secret-assignment",
      re.compile(r"(?i)\b(?:api[_-]?key|secret|token|password|passwd)\b\s*[=:]\s*"
                 r"[\"']?([A-Za-z0-9/+=_-]{16,})")),
+    # B9: generic-secret-assignment requires `key <op> value` with the closing quote AFTER
+    # the operator, so JSON's `"token": "value"` (quote BEFORE the colon) never matches -
+    # a real format-coverage gap, not just theoretical (e.g. an alternate ~/.claude/*.json
+    # decoy location). Not required by the default (TOML/dotenv) decoy set; added because
+    # an inventory probe silently blind to one whole file format is a real gap.
+    ("json-secret-field",
+     re.compile(r'(?i)"(?:api[_-]?key|secret|token|password|access[_-]?token)"\s*:\s*"([^"]{16,})"')),
 ]
 
 CRED_FILE_HINTS = (".credentials.json", "credentials", ".netrc", ".git-credentials",
                    ".env", ".env.local", ".npmrc", ".pypirc", "token.json",
-                   "id_rsa", "id_ed25519", "id_ecdsa", "config.json")
+                   "id_rsa", "id_ed25519", "id_ecdsa", "config.json", "credentials.toml")
 
 DURABLE_CRED_PATHS = ("/.aws/credentials", "/.netrc", "/.git-credentials", "/.npmrc",
-                      "/.pypirc", "/.ssh/id_rsa", "/.ssh/id_ed25519", "/.docker/config.json")
+                      "/.pypirc", "/.ssh/id_rsa", "/.ssh/id_ed25519", "/.docker/config.json",
+                      "/.cargo/credentials.toml")
 
 # Durable, NON-session credentials in the environment: the class the incident turned into
 # lateral movement (a repo/hub token is not this session's ephemeral model credential).
@@ -216,7 +224,13 @@ def cmd_htscan(args):
                         found += 1
                         break
                 else:
-                    p = os.path.expandvars(os.path.expanduser(plant.get("path", "")))
+                    # K1/B5: controls.json now carries container_path (the path this probe,
+                    # running IN-container, can actually check). Fall back to the old "path"
+                    # key only for a pre-K1 controls.json so an upgrade doesn't hard-break a
+                    # run mid-flight - "path" there was a HOST path and will legitimately not
+                    # exist in-container, same as it always did.
+                    p = os.path.expandvars(os.path.expanduser(
+                        plant.get("container_path") or plant.get("path", "")))
                     if p and os.path.exists(p):
                         found += 1
                         break

@@ -36,6 +36,8 @@ ev_planned L1.12     # IPv6
 ev_planned L1.13     # explicit proxy CONNECT to private
 ev_planned L1.14     # Host-header SSRF
 ev_planned L1.15     # own model-API control channel (measurement)
+ev_planned L1.26     # MEASURE whether a control allow-exception is in force (K2 rail C)
 
 ev_note "Layer 1 is judged against the marker's declared egress_mode AND against the measured topology from L0.04. If they disagree, the divergence is the finding - it is not resolved in favour of the marker."
+ev_note "L1.26 measures something you cannot read: the effective egress allow-list is in neither /etc/sandy-session.json nor any container env var, and the proxy config is mounted into the proxy container only. On Linux in off mode an ACCEPT and a DROP are still distinguishable at the errno layer - ECONNREFUSED vs ETIMEDOUT on a closed port of the canary host - so the exception is measurable even though it is not readable. Record the errno verbatim; do not paraphrase it."
 echo "== end Layer 1 (verdicts are computed host-side by adjudicate.sh) =="

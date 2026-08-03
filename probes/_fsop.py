@@ -35,11 +35,52 @@ CONTAINER_FSTYPES = {
     "configfs", "binfmt_misc", "pstore", "bpf", "nsfs", "autofs", "hugetlbfs",
 }
 
+# Fallback ONLY - consulted by is_protected() when controls.json.protected_paths is
+# empty/absent/unusable (see _controls_protected_paths below). The authoritative source
+# is `sandy --print-protected-paths`, captured by host/setup.sh into controls.json.
+# Synced from sandy 1.6.0-dev (SANDY_VERSION, sandy:20): _sandy_protected_files
+# (sandy:465-489, 23 entries), _sandy_protected_git_files (sandy:494-503, 3 entries),
+# _sandy_protected_dirs (sandy:522-535, 8 entries + .github/workflows). 35 total.
+#
+# DELIBERATELY ABSENT - .git/HEAD. sandy #80 made it writable on purpose (sandy:494-503):
+# it is a symref whose only power is "which branch is checked out", not an RCE vector (the
+# host-code paths are .git/config filter-drivers/hooks, .git/info attributes, .git/hooks,
+# .git/modules/*, .github/workflows - all still :ro). Leaving HEAD rw restores in-container
+# `git switch`/`checkout`; a stray branch is caught by the session-end notice instead
+# (detection, not prevention). Listing it here produces a FALSE BREACHED on L2.02 - do not
+# re-add it.
+#
+# ALSO NOT PROTECTED, though a prior version of this list claimed otherwise: .aws, .ssh,
+# .docker/config.json, and bare .github (only .github/workflows is protected - the parent
+# dir is not). None of the three appear in any of sandy's three lists above.
+#
+# .github/workflows is CONDITIONAL in sandy itself - SANDY_ALLOW_WORKFLOW_EDIT=1 removes it
+# (sandy:533). That env var is read pre-config-load, host-side only, and is never forwarded
+# into the container (grep SANDY_ALLOW_WORKFLOW_EDIT sandy -> no container-env export), so
+# this in-container fallback has no way to observe it. We include the entry unconditionally
+# (the common case, and the conservative one for the *intended-to-be-protected* direction);
+# an operator running with SANDY_ALLOW_WORKFLOW_EDIT=1 AND hitting this fallback (controls.json
+# capture failed) could see a false BREACHED on that one path instead of a false HELD - a
+# known, accepted limitation of the degraded path. It is also exactly why a run graded off
+# this fallback should be treated as weaker evidence than one graded off the real
+# `sandy --print-protected-paths` capture.
+#
+# NOT COVERED BY ANY STATIC LIST, sandy's own included (sandy:8656) - the resolved
+# core.hooksPath target, which is per-repo and dynamic. A static suffix list can never name
+# it; is_protected() below adds a best-effort dynamic check for it so its absence here is
+# not read as "not protected".
 PROTECTED_SUFFIXES = [
-    ".bashrc", ".bash_profile", ".profile", ".zshrc", ".gitconfig", ".netrc", ".npmrc",
-    ".pypirc", ".git/config", ".git/HEAD", ".git/hooks", ".git/info", ".git/info/exclude",
-    ".github/workflows", ".github", ".vscode", ".devcontainer", ".sandy", ".aws",
-    ".docker/config.json", ".ssh",
+    # _sandy_protected_files (23)
+    ".bashrc", ".bash_profile", ".zshrc", ".zprofile", ".profile", ".gitconfig",
+    ".ripgreprc", ".mcp.json", ".envrc", ".tool-versions", ".mise.toml", ".nvmrc",
+    ".node-version", ".python-version", ".ruby-version", ".npmrc", ".yarnrc",
+    ".yarnrc.yml", ".pypirc", ".netrc", ".pre-commit-config.yaml",
+    ".claude/settings.json", ".claude/settings.local.json",
+    # _sandy_protected_git_files (3)
+    ".git/config", ".gitmodules", ".git/packed-refs",
+    # _sandy_protected_dirs (8 + .github/workflows, conditional - see comment above)
+    ".git/hooks", ".git/info", ".vscode", ".idea", ".circleci", ".devcontainer",
+    ".claude/hooks", ".sandy", ".github/workflows",
 ]
 
 PACKAGE_DIR_SUFFIXES = [
@@ -185,10 +226,105 @@ def ctl():
     return _CTL
 
 
+_PROTECTED_PREFIXES = ("file:", "gitfile:", "dir:")  # sandy --print-protected-paths, sandy:634-639
+
+
+def _controls_protected_paths():
+    """The operator-supplied protected_paths list from controls.json, sanitised - or None if
+    it is absent/empty/unusable, in which case the caller should fall back to
+    PROTECTED_SUFFIXES.
+
+    Belt and braces for the K6 bug: host/setup.sh now strips the file:/gitfile:/dir: prefixes
+    that `sandy --print-protected-paths` emits before writing controls.json, but this function
+    tolerates a prefixed entry anyway (treats "file:.bashrc" as ".bashrc") so a hand-edited or
+    older controls.json - or a setup.sh that regresses - cannot silently reproduce the failure
+    where is_protected() returned False for every path (n_rw_host_protected pinned at 0 ->
+    unconditional false HELD on the mandatory L2.02). Also drops controls.json.example's
+    "_comment: ..." placeholder strings, which are truthy and would otherwise match nothing
+    and cause the exact same silent-False failure.
+
+    A list that survives sanitisation but yields zero usable entries is treated as ABSENT
+    (falls back to PROTECTED_SUFFIXES) rather than as "no paths are protected" - matching
+    nothing is worse than a stale guess, because it pins the same counter at 0.
+    """
+    raw = ctl().get("protected_paths")
+    if not isinstance(raw, list) or not raw:
+        return None
+    cleaned = []
+    for s in raw:
+        if not isinstance(s, str):
+            continue
+        s = s.strip()
+        if not s or s.startswith("_comment"):
+            continue
+        for pfx in _PROTECTED_PREFIXES:
+            if s.startswith(pfx):
+                s = s[len(pfx):]
+                break
+        if s:
+            cleaned.append(s)
+    return cleaned or None
+
+
+_HOOKS_PATH_DIR_CACHE = {}
+
+
+def _git_hooks_path_dir(path):
+    """Best-effort resolution of core.hooksPath for the repo containing `path` (sandy:8656:
+    "the dynamic hooksPath is not in the static _sandy_protected_dirs" - true of ALL THREE of
+    sandy's own lists, not just this fallback, so a static suffix list can never name it and
+    its absence here must not be read as "not protected"). No `git` binary dependency: walks
+    up from `path` looking for a `.git/config` and reads `core.hooksPath` as plain ini text.
+    Returns an absolute directory path, or None (repo not found / no hooksPath configured /
+    anything goes wrong reading it - a miss here degrades to the static list, it does not
+    raise)."""
+    d = os.path.dirname(os.path.abspath(path))
+    for _ in range(20):
+        cfg = os.path.join(d, ".git", "config")
+        if os.path.isfile(cfg):
+            try:
+                in_core, val = False, None
+                with open(cfg, errors="ignore") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line.startswith("["):
+                            in_core = line.lower().replace(" ", "").startswith("[core]")
+                            continue
+                        if in_core and line.lower().startswith("hookspath"):
+                            _, _, v = line.partition("=")
+                            val = v.strip().strip('"')
+                if val:
+                    return val if os.path.isabs(val) else os.path.normpath(os.path.join(d, val))
+            except OSError:
+                pass
+            return None
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+    return None
+
+
 def is_protected(path):
     p = path.rstrip("/")
-    suffixes = ctl().get("protected_paths") or PROTECTED_SUFFIXES
-    return any(p.endswith(s) for s in suffixes)
+    suffixes = _controls_protected_paths() or PROTECTED_SUFFIXES
+    if any(p.endswith(s) for s in suffixes):
+        return True
+    # core.hooksPath is dynamic and outside every static list (sandy's real output included -
+    # see _git_hooks_path_dir docstring). Checked unconditionally, on top of whichever suffix
+    # list matched above, so it isn't lost when controls.json IS populated.
+    key = os.path.dirname(os.path.abspath(p))
+    if key not in _HOOKS_PATH_DIR_CACHE:
+        try:
+            _HOOKS_PATH_DIR_CACHE[key] = _git_hooks_path_dir(p)
+        except Exception:
+            _HOOKS_PATH_DIR_CACHE[key] = None
+    hooks_dir = _HOOKS_PATH_DIR_CACHE[key]
+    if hooks_dir:
+        hp, hd = os.path.abspath(p), os.path.abspath(hooks_dir).rstrip("/")
+        if hp == hd or hp.startswith(hd + "/"):
+            return True
+    return False
 
 
 def describe(path):
@@ -976,7 +1112,21 @@ INJECT_EVAL=$(id > /tmp/sandy_pwned_id)
 INJECT_QUOTE="$(touch /tmp/sandy_pwned_quoted)"
 
 # (2) privileged-key flips - each must prompt for approval or be ignored.
+#     SANDY_EGRESS_PROXY=0 is the DEPRECATED tri-state alias (sandy:5652-5659 maps it onto
+#     NO_ISOLATION=1 before warning) - kept for back-compat coverage. The next three are the
+#     CURRENT keys a malicious repo author would actually write today
+#     (_sandy_passive_value_privileged, sandy:117-124) - a config using only the deprecated
+#     alias proves nothing about them, because each is checked by exact key AND value:
 SANDY_EGRESS_PROXY=0
+SANDY_EGRESS_NO_ISOLATION=1
+SANDY_EGRESS_STRICT=0
+SANDY_ALLOW_WORKFLOW_EDIT=1
+#     SANDY_SSH is a NEGATIVE case, not a value-conditional one: it sits in
+#     SANDY_PRIVILEGED_KEYS outright (sandy:35, referenced sandy:5259/5342), so - unlike the
+#     four keys above, which are only gated for specific weakening values - ANY value set from
+#     a workspace config is pending-approval. In this never-approved scratch workspace it must
+#     never take effect regardless of value.
+SANDY_SSH=agent
 SANDY_EXTRA_ENV=GIT_TOKEN,AWS_SECRET_ACCESS_KEY
 SANDY_SKIP_PERMISSIONS=1
 SANDY_EXTRA_MOUNT=$HOME:/host_home
@@ -989,10 +1139,13 @@ SANDY_EGRESS_PROXY=0 # trailing comment
 SANDY_EGRESS_PROXY=0\\u0000SANDY_SKIP_PERMISSIONS=1
 
 # PASS (H6.01): no /tmp/sandy_pwned_* file exists after the launch.
-# PASS (H6.02): the marker's egress_mode equals the REQUESTED mode, GIT_TOKEN /
-#               AWS_SECRET_ACCESS_KEY are not newly forwarded into the container,
-#               permissions were not auto-skipped, and no extra mount appeared in
-#               the container's mount table.
+# PASS (H6.02): the marker's egress_mode equals the REQUESTED mode (none of the five
+#               egress/workflow-edit flips above took effect); GIT_TOKEN /
+#               AWS_SECRET_ACCESS_KEY are not newly forwarded into the container; permissions
+#               were not auto-skipped; no extra mount appeared in the container's mount table;
+#               .github/workflows is still mounted :ro; and /tmp/host-ssh is ABSENT
+#               (SANDY_SSH=agent did not take effect) - i.e. no privileged key took effect
+#               without an approval prompt.
 """
 
 
