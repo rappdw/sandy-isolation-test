@@ -467,10 +467,48 @@ else
 fi
 [ -n "$HOST_RESULTS_FILE" ] && ADJUDICATE_FLAGS="$ADJUDICATE_FLAGS --host-results $HOST_RESULTS_FILE"
 
+# --sandy + --sandbox-root: derive both here so the operator never has to remember them.
+#   --sandy       anchors sandy_version and the residual registry HOST-side (K3-VERIFY.md D1),
+#                 instead of trusting the agent-reported marker version.
+#   --sandbox-root lets adjudicate decide whether L8/R5 persistence paths are bounded to the
+#                 sandbox (the conceded residual) or escape to the host (a real breach) - without
+#                 it every L8 row renders "bound UNCHECKED".
+# Each is added ONLY when it actually resolves: passing a wrong/absent --sandy makes adjudicate
+# fail-closed (every residual row UNQUALIFIED), which is worse than falling back quietly, so a
+# value we cannot verify is turned into a printed NOTE, never a flag.
+KIT_DIR="$(dirname "$HERE")"
+SANDY_SRC="${SANDY_SRC:-$KIT_DIR/sandy}"   # same convention as check_residuals.sh's default ./sandy
+if [ -f "$SANDY_SRC/sandy" ] && [ -f "$SANDY_SRC/docs/security/THREAT_MODEL.md" ]; then
+  ADJUDICATE_FLAGS="$ADJUDICATE_FLAGS --sandy $SANDY_SRC"
+  SANDY_SRC_USED=1
+else
+  SANDY_SRC_USED=""
+fi
+SANDY_HOME_DIR="${SANDY_HOME:-$HOME/.sandy}"
+# newest sandbox dir for THIS project basename - the same resolution the proxy-log snapshot uses
+# above (K11: a shared basename across projects can match the wrong one; that is a known caveat).
+SANDBOX_ROOT="$(ls -td "$SANDY_HOME_DIR"/sandboxes/"$(basename "$(pwd -P)")"-*/ 2>/dev/null | head -1)"
+if [ -n "$SANDBOX_ROOT" ] && [ -d "$SANDBOX_ROOT" ]; then
+  ADJUDICATE_FLAGS="$ADJUDICATE_FLAGS --sandbox-root ${SANDBOX_ROOT%/}"
+  SANDBOX_ROOT_USED=1
+else
+  SANDBOX_ROOT_USED=""
+fi
+
 cat <<EOF
 
 == session exited (rc=$RC). Adjudicate it: ==
   bash adjudicate.sh "${RUN:-reports/runs/<run-id>}" $ADJUDICATE_FLAGS
   # nonce + requested-mode are auto-verified from the manifest - no --expected-nonce/--requested-mode needed.
   # so is the allow-exception: this run carried ${CONTROL_ALLOW:-none}.
+  # --sandy + --sandbox-root are auto-added above when they resolve (K3 version anchor; L8/R5 bound check).
+EOF
+[ -z "$SANDY_SRC_USED" ] && cat >&2 <<EOF
+  # NOTE: --sandy NOT added - no sandy checkout with docs/security/THREAT_MODEL.md at $SANDY_SRC.
+  #   Point SANDY_SRC=<path to a sandy checkout> (or symlink it to $KIT_DIR/sandy) so adjudicate
+  #   anchors sandy_version + the residual registry host-side instead of trusting the agent marker.
+EOF
+[ -z "$SANDBOX_ROOT_USED" ] && cat >&2 <<EOF
+  # NOTE: --sandbox-root NOT added - no sandbox dir under $SANDY_HOME_DIR/sandboxes/$(basename "$(pwd -P)")-*.
+  #   Set SANDY_HOME if your sandbox tree lives elsewhere; without it every L8/R5 row reads 'bound UNCHECKED'.
 EOF
