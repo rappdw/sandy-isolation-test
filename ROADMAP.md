@@ -528,3 +528,26 @@ silently dropped, and the kit stops depending on someone remembering to wire eac
 `adjudicate.sh` and `testplan.json` are K3's surface, and K1 owns only the producer side. Also
 fix the stale comment at `host/honeytoken_check.sh:850–855`, which claims the field feeds
 adjudicate today; `:1152` is honest about it being "a future adjudicate.sh".
+
+---
+
+## K16 — `via_allow_exception` was tagged on filesystem canaries — ✅ **DONE** (2026-08-03)
+
+**Found on the first live `=0` control run.** The control-ledger summary printed
+`L2-protected=PASS (via allow-exception)` for a **filesystem** canary. `adjudicate.sh`'s tag
+site set `via_allow_exception=True` for *any* canary retrieved while an allow-exception was in
+force — but `L2-protected`/`L2-outside`/`L3-*` are `kind: file`/`file-sentinel`, read from a
+mounted path. A network allow-exception (an iptables ACCEPT via `SANDY_ALLOW_LAN_HOSTS`, or a
+proxy allowlist) cannot make a file readable, so the caveat is not merely wrong-valued, it is
+**not applicable** — a *spurious* caveat, the mirror image of the missing-caveat failure the K2
+machinery exists to prevent.
+
+**Fix (`adjudicate.sh`, the `=0` ledger-recording block):** look up the canary's `kind` and, for
+`file`/`file-sentinel`, strip every allow-exception key (`via_allow_exception`,
+`allow_exception_entries`, `allow_exception_mechanism`, `caveat`, `allow_exception_provenance`)
+and let no branch set one. Gating is **exclusionary** (strip known filesystem kinds) not
+inclusionary (tag only http), so a future network kind still gets the caveat — the safety
+property "a network canary PASS always discloses the exception" is never weakened. The strip also
+runs on the carried-forward `prev`, so a stale tag written by a pre-fix run is cleared on the next
+control run. Proven with the extracted block: http keeps tag+caveat; file/file-sentinel get
+neither; a stale tag is cleared.

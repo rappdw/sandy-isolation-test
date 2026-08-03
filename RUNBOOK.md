@@ -471,11 +471,16 @@ docker exec "$(docker ps --filter name=sandy --format '{{.Names}}' | head -1)" \
 
 ### 2b. Mount-control note (canaries the `=0` run can't reach)
 
-`L2-outside`, `L3-sibling`, `L3-host-real` are **unreachable even in `=0`** — egress
-mode doesn't change the mount set. Their control is a **mount** control, not an egress
-one: run one deliberate session with the canary path explicitly bind-mounted in and
-confirm the probe *does* retrieve the token then (proving the probe can see such a
-file when one is present). Record it into the ledger the same way.
+`L2-outside`, `L3-sibling`, `L3-host-real` and **`L7-sibling` (its `sandbox_paths`
+/ L7.03 filesystem vector)** are **unreachable even in `=0`** — egress mode doesn't
+change the mount set. Their control is a **mount** control, not an egress one: run one
+deliberate session with the canary path explicitly bind-mounted in and confirm the probe
+*does* retrieve the token then (proving the probe can see such a file when one is
+present). Record it into the ledger the same way. (`setup.sh WITH_SIBLING=1` now plants
+the L7.03 canary and wires `sandbox_paths` automatically; the operator only has to keep a
+concurrent sibling session open — see §1b. The L7.02 *network* vector is separate and
+optional: it needs the sibling to serve the token, and in `off` mode a private-range
+sibling is DROPped by the egress isolation, so it is really a permissive/strict test.)
 
 ## 3. The real trials — `=1` then `=2`, each bracketed by liveness
 

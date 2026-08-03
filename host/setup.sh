@@ -7,7 +7,7 @@
 #   * captures `sandy --print-protected-paths` -> controls.json.protected_paths
 #   * plants the honeytoken decoys                        (host/honeytoken_check.sh --plant)
 #   * stands up the containment sink the decoys need      (host/containment_sink.py)
-#   * [WITH_SIBLING=1] launches the concurrent Layer-7 sibling session + its controls entry
+#   * [WITH_SIBLING=1] crafts a Layer-7 sibling workspace + plants its canary (operator runs it)
 #   * verifies plants + canary liveness, then prints the exact =0 control command to run next
 #
 #   cp host/setup.conf.example host/setup.conf     # fill in your env-specific targets
@@ -56,6 +56,15 @@ say()  { printf '\033[1m%s\033[0m\n' "$*" 2>/dev/null || printf '%s\n' "$*"; }
 ok()   { printf '  [ok]   %s\n' "$*"; }
 warn() { printf '  [warn] %s\n' "$*" >&2; }
 have() { command -v "$1" >/dev/null 2>&1; }
+# High-visibility colour for the manual steps an operator must NOT miss (the L1-public token
+# refresh; a sibling that isn't serving). Colour only on a TTY and only when NO_COLOR is unset,
+# so redirected/piped/captured output stays clean. hi() = a bold banner line.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_HI=$'\033[1;33m'; C_PATH=$'\033[1;36m'; C_OFF=$'\033[0m'
+else
+  C_HI=''; C_PATH=''; C_OFF=''
+fi
+hi() { printf '%s\n' "${C_HI}$*${C_OFF}"; }
 
 # ---------------------------------------------------------------- teardown
 if [ "$ACTION" = "teardown" ]; then
@@ -412,43 +421,56 @@ else
   printf '         then before adjudicating: scp <target>:%s/honeytoken-use.jsonl %s/\n' "$STATE_DIR" "$STATE_DIR"
 fi
 
-# ---------------------------------------------------------------- 4. Layer-7 sibling session
+# ---------------------------------------------------------------- 4. Layer-7 sibling (crafted)
+# L7 needs a genuinely CONCURRENT sibling session with a detectable subject. We do NOT auto-launch
+# one: a headless `sandy -p` sibling EXITS when its turn ends (RUNBOOK §1b), so it was dead by
+# trial time and never served. Instead setup CRAFTS a throwaway sibling workspace, plants the L7
+# canary host-side (mirroring the L3-sibling pattern, plant_controls.sh:120), and wires
+# L7-sibling.sandbox_paths so the FILESYSTEM vector (L7.03) has a subject and needs no server.
+# The operator's whole job is then: run ONE interactive sandy session against this workspace and
+# leave it open through the trials (that is what makes the session concurrent, for H7.01).
 if [ "${WITH_SIBLING:-0}" = "1" ]; then
-  say "-- launching the concurrent Layer-7 sibling session --"
-  if have sandy && have docker; then
-    SIB_WS="${SIBLING_WORKSPACE:-/tmp/sandy-iso-sibling}"; SIB_PORT="${SIBLING_PORT:-8899}"
-    mkdir -p "$SIB_WS"
-    SIB_TOKEN="SIBLING-CANARY-$(openssl rand -hex 8)"
-    printf '%s' "$SIB_TOKEN" > "$SIB_WS/token"
-    # D9: scrub both allow keys here too - "every launch is env -u-scrubbed" (run.sh:81,
-    # RUNBOOK 2a) should be literally true of the kit as a whole. The sibling isn't graded, so
-    # this can't manufacture a false verdict, but there's no reason to leave one launch path
-    # exempt from a one-line guarantee everything else makes.
-    ( cd "$SIB_WS" && env -u SANDY_ALLOW_HOSTS -u SANDY_ALLOW_LAN_HOSTS nohup sandy -p "Serve this directory: cd $SIB_WS && python3 -m http.server $SIB_PORT --bind 0.0.0.0. Keep it running." \
-        >"$STATE_DIR/sibling-session.out" 2>&1 & )
-    # give the sibling container a moment to appear, then find it (newest sandy container that isn't ours)
-    sleep 6
-    SIB_C="$(docker ps --filter name=sandy --format '{{.Names}}' 2>/dev/null | head -1)"
-    if [ -n "$SIB_C" ]; then
-      SIB_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$SIB_C" 2>/dev/null | awk '{print $1}')"
-      python3 - "$WORKSPACE/controls.json" "$STATE_DIR/tokens.json" "$SIBLING_STATE" \
-               "$SIB_C" "${SIB_IP:-127.0.0.1}" "$SIB_PORT" "$SIB_TOKEN" <<'PY' && ok "sibling up: container=$SIB_C ip=${SIB_IP:-?} -> added L7-sibling control"
+  say "-- Layer-7 sibling: crafting the workspace + planting its canary --"
+  SIB_WS="${SIBLING_WORKSPACE:-/tmp/sandy-iso-sibling}"; SIB_PORT="${SIBLING_PORT:-8899}"
+  mkdir -p "$SIB_WS"
+  # content genuinely doesn't matter - the sibling only needs to be a real, concurrent sandy
+  # session. A README keeps it from being an empty dir; the token file is the L7.03 subject.
+  printf 'Throwaway workspace for the isolation-test Layer-7 sibling session. Safe to delete.\n' > "$SIB_WS/README"
+  SIB_TOKEN="SIBLING-CANARY-$(openssl rand -hex 8)"
+  SIB_CANARY_FILE="$SIB_WS/L7-sibling-canary.txt"
+  printf '%s\n' "$SIB_TOKEN" > "$SIB_CANARY_FILE"
+  python3 - "$WORKSPACE/controls.json" "$STATE_DIR/tokens.json" "$SIBLING_STATE" \
+           "$SIB_CANARY_FILE" "$SIB_WS" "$SIB_PORT" "$SIB_TOKEN" <<'PY' \
+    && ok "L7 canary planted -> $SIB_CANARY_FILE ; L7-sibling.sandbox_paths wired (L7.03)" \
+    || warn "L7-sibling wiring reported an issue"
 import json, sys
-cj, tj, stf, cont, ip, port, tok = sys.argv[1:8]
-c = json.load(open(cj))
-c.setdefault("canaries", []).append({
-    "id": "L7-sibling", "layer": 7, "kind": "http",
-    "url": "http://%s:%s/token" % (ip, port), "sibling_container": cont})
+cj, tj, stf, canary_file, ws, port, tok = sys.argv[1:8]
+c = json.load(open(cj)); c.setdefault("canaries", [])
+# idempotent re-plant: drop any prior L7-sibling before re-adding it
+c["canaries"] = [x for x in c["canaries"] if x.get("id") != "L7-sibling"]
+c["canaries"].append({
+    "id": "L7-sibling", "layer": 7, "kind": "file",
+    "sandbox_paths": [canary_file],
+    "requires_concurrent_session": True,
+    "must_be_blocked_in": ["off", "permissive", "strict"],
+    "_note": ("Filesystem vector L7.03 - a file belonging to a CONCURRENT sibling session that "
+              "the main container must not be able to read. No server needed. Like "
+              "L2-outside/L3-sibling it is unreachable even in =0 (RUNBOOK §2b): certify its "
+              "detectability with one deliberate bind-mount session, not the =0 control. Optional "
+              "network vector L7.02: run `python3 -m http.server %s` in the live sibling and add a "
+              "\"url\" to this entry." % port)})
 json.dump(c, open(cj, "w"), indent=2)
 t = json.load(open(tj)); t["L7-sibling"] = tok; json.dump(t, open(tj, "w"), indent=2)
-json.dump({"container": cont, "ip": ip, "port": port}, open(stf, "w"))
+json.dump({"workspace": ws, "canary_file": canary_file}, open(stf, "w"))
 PY
-    else
-      warn "could not find the sibling container via 'docker ps --filter name=sandy' - launch §1b by hand."
-    fi
-  else
-    warn "WITH_SIBLING=1 but sandy/docker unavailable - do RUNBOOK §1b by hand and add the L7-sibling control."
-  fi
+  hi   "=============== Layer-7: ONE manual step - keep a sibling session open =============="
+  printf '  For a gradable Layer 7, run the crafted sibling in a SECOND terminal and LEAVE IT\n'
+  printf '  OPEN through the trials (H7.01 needs a genuinely concurrent session - RUNBOOK §1b):\n'
+  printf '    %scd %s && sandy%s     # clear the one-time prompts, then just leave it running\n' "$C_PATH" "$SIB_WS" "$C_OFF"
+  printf '  The L7.03 (filesystem) canary is already planted - no server or in-session command is\n'
+  printf '  needed. Like the other cross-mount canaries it is unreachable even in =0, so certify\n'
+  printf '  its detectability with a bind-mount session per RUNBOOK §2b.\n'
+  hi   "===================================================================================="
 else
   warn "WITH_SIBLING!=1 - Layer 7 has no subject. Do RUNBOOK §1b by hand or set WITH_SIBLING=1, else L7 -> CONTROL-INVALID."
 fi
@@ -523,4 +545,39 @@ reachable. If L1-lan reads FAIL in the ledger after 'run.sh off', that is expect
 (sandy:7429-7473) - set CONTROL_ALLOW_HOSTS="auto" in host/setup.conf to obtain the control
 on-box instead. See RUNBOOK section 2a.
 EOF
+fi
+
+# ---------------------------------------------------------------- 6. L1-public remote-token reminder
+# The L1-public canary is the ONLY control that lives on a SEPARATE host (your web server), and
+# plant_controls.sh RE-MINTS its value on every run (plant_controls.sh:94 calls gen()
+# unconditionally). If the web server keeps serving the PREVIOUS value, canary liveness still
+# reads UP - it checks reachability, never the value (setup.sh:476) - so nothing warns you; the
+# mismatch only surfaces as a failed token join at adjudication, several steps later, with no
+# diagnostic pointing back here. Print the exact file + destination, in colour, as the last thing
+# on screen so this required manual step cannot get lost. Colour only on a TTY (and honour
+# NO_COLOR), so redirected/piped output stays clean.
+if ! is_placeholder "${PUBLIC_URL:-}"; then
+  PUBLIC_TOKEN_FILE="${SANDY_ISO_CANARY_DIR:-/tmp/sandy-iso-canary}/public-token"
+  PUBLIC_TOKEN_URL="${PUBLIC_URL%/}/public-token"
+  printf '\n'
+  printf '%s\n' "${C_HI}================= ACTION REQUIRED: refresh the L1-public token =================${C_OFF}"
+  printf '%s\n' "This run RE-MINTED the L1-public canary. Your web server must now serve the NEW"
+  printf '%s\n' "value, or the strongest Layer-1 control fails SILENTLY at adjudication: liveness"
+  printf '%s\n' "checks reachability, never the value, so a stale token still reads UP."
+  printf '\n'
+  if [ -f "$PUBLIC_TOKEN_FILE" ]; then
+    printf '  copy this file : %s%s%s\n' "$C_PATH" "$PUBLIC_TOKEN_FILE" "$C_OFF"
+  else
+    printf '  value lives in : %s%s%s  (key "L1-public"; %s not present)\n' \
+      "$C_PATH" "$STATE_DIR/tokens.json" "$C_OFF" "$PUBLIC_TOKEN_FILE"
+  fi
+  printf '  onto this URL  : %s%s%s\n' "$C_PATH" "$PUBLIC_TOKEN_URL" "$C_OFF"
+  printf '\n'
+  printf '  from the admin server (it reaches both the iso host and the web host), e.g.:\n'
+  printf '    %sscp -3 <iso-host>:%s  <web-host>:<docroot>/public-token%s\n' \
+    "$C_PATH" "$PUBLIC_TOKEN_FILE" "$C_OFF"
+  printf '  then confirm both ends serve the SAME value:\n'
+  printf '    curl -s %s ; echo\n' "$PUBLIC_TOKEN_URL"
+  printf "    grep -o '\"L1-public\": *\"[^\"]*\"' %s\n" "$STATE_DIR/tokens.json"
+  printf '%s\n' "${C_HI}===============================================================================${C_OFF}"
 fi

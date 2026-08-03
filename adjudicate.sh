@@ -1016,6 +1016,23 @@ for test in PLAN["tests"]:
             platform=PLATFORM, evidence_test=tid,
             note="not retrieved in this control run",
         ))
+        # K2 live-run finding: the allow-exception machinery below applies ONLY to network
+        # canaries. A filesystem canary (kind file/file-sentinel) is retrieved by READING a
+        # mounted path; a network allow-exception (an iptables ACCEPT via SANDY_ALLOW_LAN_HOSTS,
+        # or a proxy allowlist) cannot make a file readable. So via_allow_exception is not merely
+        # False for these - it is NOT APPLICABLE. Recording it (as the `if ALLOW_EXC` branch did
+        # for ANY canary retrieved while an exception was set) put a spurious network caveat on
+        # L2-protected/L2-outside/L3-*, the mirror image of the missing-caveat failure this whole
+        # block exists to prevent. Strip every allow-exception key for these canaries here - both
+        # so no branch below can set one, and so a stale tag written by a pre-fix run (carried
+        # forward in `prev`) is cleared on the next control run.
+        _canary_kind = next((c.get("kind") for c in (CONTROLS.get("canaries") or [])
+                             if c.get("id") == cid), None)
+        _fs_canary = _canary_kind in ("file", "file-sentinel")
+        if _fs_canary:
+            for _k in ("via_allow_exception", "allow_exception_entries",
+                       "allow_exception_mechanism", "caveat", "allow_exception_provenance"):
+                led.pop(_k, None)
         if hit:
             led.update({"retrieved": True, "evidence_test": tid, "last_ts": rec.get("ts"),
                         "note": None})
@@ -1026,7 +1043,11 @@ for test in PLAN["tests"]:
             # evidence that off mode permits private-range egress, and a bare
             # "L1-lan=PASS platform=linux" reads exactly that way. Carry the caveat with the
             # data so it cannot be separated from it.
-            if ALLOW_EXC:
+            if _fs_canary:
+                # provenance is not "unknown" and not "False" - the concept does not apply to a
+                # file read. Keys were already stripped above; assert nothing here.
+                pass
+            elif ALLOW_EXC:
                 led.update({
                     "via_allow_exception": True,
                     "allow_exception_entries": [e for e in ALLOW_EXC.split(",") if e],
