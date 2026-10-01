@@ -450,6 +450,109 @@ def cmd_sweep(a):
                 "ports": ports, "max_hosts": a.max_hosts})
 
 
+def tls_hello(ip, port, sni, timeout):
+    """TCP connect + TLS handshake to (ip, port) with SNI=sni, then close. Sends NO application
+    bytes: a completed handshake is the whole signal (ServerHello + cert came back), so on a
+    HELD path nothing ever reaches the named third party."""
+    rec = {"ip": ip, "port": port, "sni": sni}
+    t0 = time.time()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect((ip, port))
+        rec["tcp_connected"] = True
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        tls = ctx.wrap_socket(sock, server_hostname=sni)
+        rec["tls_handshake_ok"] = True
+        rec["tls_version"] = tls.version()
+        tls.close()
+        rec["result"] = "handshake"
+    except Exception as e:  # noqa: BLE001 - every failure is evidence
+        rec.setdefault("tcp_connected", False)
+        rec["tls_handshake_ok"] = False
+        rec["result"], rec["errno"] = classify_exc(e)
+        rec["exc"] = type(e).__name__
+    finally:
+        try:
+            sock.close()
+        except OSError:
+            pass
+    rec["wall_ms"] = ms_since(t0)
+    return rec
+
+
+def connect_status(pip, pport, target, timeout):
+    """CONNECT target via the explicit proxy port; read ONLY the status line, then close
+    (no tunnel traffic is ever sent, even on a 200)."""
+    rec = {"proxy": "%s:%s" % (pip, pport), "target": target}
+    t0 = time.time()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect((pip, int(pport)))
+        sock.sendall(("CONNECT %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: sandy-isolation-test/2\r\n\r\n"
+                      % (target, target)).encode())
+        buf = b""
+        while b"\r\n" not in buf and len(buf) < 512:
+            chunk = sock.recv(256)
+            if not chunk:
+                break
+            buf += chunk
+        line = buf.split(b"\r\n", 1)[0].decode("latin-1", "replace")
+        m = re.match(r"HTTP/\d\.\d\s+(\d{3})", line)
+        rec["status_line"] = line[:120]
+        rec["http_status"] = int(m.group(1)) if m else None
+        rec["result"] = "status" if m else ("closed" if not buf else "garbled")
+    except Exception as e:  # noqa: BLE001
+        rec["http_status"] = None
+        rec["result"], rec["errno"] = classify_exc(e)
+    finally:
+        try:
+            sock.close()
+        except OSError:
+            pass
+    rec["wall_ms"] = ms_since(t0)
+    return rec
+
+
+def cmd_doh(a):
+    """L1.27 (S2.7-12): sandy 2.4.0 (#154) refuses well-known DNS-over-HTTPS resolvers in
+    permissive mode (proxy/doh.go dohProviders; policy.go checks it before any lookup or dial,
+    on every port incl. CONNECT :853). Strict refuses them via the allowlist. Per name, three
+    payload-free paths: the transparent :443 path (resolve the name - in proxy modes sandy's
+    DNS answers with the proxy IP - then TLS ClientHello with that SNI), and explicit CONNECT
+    to :443 and :853. A transparent-path deny is a silent close, indistinguishable from a dead
+    host, so the HELD rule in testplan.json also requires a matching proxy-log deny line."""
+    names = [n.strip() for n in a.names.split(",") if n.strip()]
+    pip = a.proxy or proxy_ip()
+    rows = []
+    for name in names:
+        try:
+            ip = socket.gethostbyname(name)
+            rerr = None
+        except OSError as e:
+            ip, rerr = None, ename(e) or type(e).__name__
+        row = {"name": name, "resolved_ip": ip, "resolve_errno": rerr,
+               "resolved_to_proxy": bool(ip and pip and ip == pip)}
+        row["sni443"] = tls_hello(ip, 443, name, a.timeout) if ip else {"result": "no-resolve"}
+        if pip:
+            row["connect443"] = connect_status(pip, a.proxy_port, "%s:443" % name, a.timeout)
+            row["connect853"] = connect_status(pip, a.proxy_port, "%s:853" % name, a.timeout)
+        rows.append(row)
+    n_tls = sum(1 for r in rows if r["sni443"].get("tls_handshake_ok"))
+    n_c2xx = sum(1 for r in rows for k in ("connect443", "connect853")
+                 if (r.get(k) or {}).get("http_status") and 200 <= r[k]["http_status"] < 300)
+    n_c4xx = sum(1 for r in rows for k in ("connect443", "connect853")
+                 if (r.get(k) or {}).get("http_status") and 400 <= r[k]["http_status"] < 500)
+    return out({"op": "doh", "proxy_ip": pip, "proxy_port": int(a.proxy_port), "names": rows,
+                "summary": {"n_names": len(rows), "n_tls_handshake_ok": n_tls,
+                            "n_connect_2xx": n_c2xx, "n_connect_4xx": n_c4xx,
+                            "n_paths": len(rows) * (3 if pip else 1),
+                            "reached": bool(n_tls or n_c2xx)}})
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd")
@@ -473,13 +576,18 @@ def main():
     p.add_argument("--host", default="2606:4700:4700::1111"); p.add_argument("--port", type=int, default=443)
     p.add_argument("--timeout", type=float, default=TIMEOUT)
 
+    p = sub.add_parser("doh")
+    p.add_argument("--names", default="dns.google,mozilla.cloudflare-dns.com")
+    p.add_argument("--proxy", default=""); p.add_argument("--proxy-port", default=3128)
+    p.add_argument("--timeout", type=float, default=6.0)
+
     p = sub.add_parser("sweep")
     p.add_argument("--cidr", default="auto"); p.add_argument("--ports", default="22,80,443,3128")
     p.add_argument("--max-hosts", type=int, default=32)
 
     a = ap.parse_args()
     fn = {"topology": cmd_topology, "resolve": cmd_resolve, "tcp": cmd_tcp, "udp": cmd_udp,
-          "http": cmd_http, "v6": cmd_v6, "sweep": cmd_sweep}.get(a.cmd)
+          "http": cmd_http, "v6": cmd_v6, "sweep": cmd_sweep, "doh": cmd_doh}.get(a.cmd)
     if not fn:
         ap.print_help()
         return 2

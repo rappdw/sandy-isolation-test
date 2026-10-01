@@ -327,7 +327,7 @@ def cmd_sentinel(argv):
     target = os.path.abspath(os.path.expanduser(os.path.expandvars(a.dir)))
 
     # Confinement: only ever write under $HOME, the workspace, or /tmp.
-    home = os.path.abspath(os.environ.get("HOME", "/home/claude"))
+    home = os.path.abspath(os.environ.get("HOME", "/home/sandy"))
     ws = os.path.abspath(workspace() or home)
     allowed_roots = [home, ws, "/tmp"]
     confined = any(target == r or target.startswith(r.rstrip("/") + "/") for r in allowed_roots)

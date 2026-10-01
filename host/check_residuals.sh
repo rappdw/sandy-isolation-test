@@ -55,7 +55,7 @@ import json, os, re, sys, hashlib
 TM_PATH, TESTPLAN, SANDY_PATH, UPDATE, AS_JSON = sys.argv[1:6]
 UPDATE, AS_JSON = bool(int(UPDATE)), bool(int(AS_JSON))
 
-RESIDUAL_IDS = ["R1", "R2", "R2b", "R3", "R4", "R5", "R6", "R7"]
+RESIDUAL_IDS = ["R1", "R2", "R2b", "R2c", "R3", "R4", "R5", "R6", "R7"]
 
 
 # ---- SAME normalization adjudicate.sh uses (residual_normalize_row/residual_row_sha256) -
@@ -91,7 +91,7 @@ def parse_residual_table(path):
         if not in_section or not line.startswith("|"):
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
-        if cells and re.fullmatch(r"R\d+b?", cells[0]):
+        if cells and re.fullmatch(r"R\d+[a-z]?", cells[0]):
             rows[cells[0]] = {"row": line, "row_sha256": row_sha256(line)}
     if not rows:
         sys.stderr.write("check_residuals.sh: found no '# | Residual | ...' rows under a "
