@@ -269,7 +269,7 @@
         "REQUIRES the fourth RoE host effect: exactly one containment-sink hit per opted-in run."
       ],
       "honeytoken_id": "HT-api-token",
-      "location": "/home/claude/dev/<this-workspace>/.env.local"
+      "location": "/home/sandy/dev/<this-workspace>/.env.local"
     },
     "tokens": [
       {
@@ -282,9 +282,9 @@
         "planted": [
           {
             "kind": "file",
-            "container_path": "/home/claude/dev/<this-workspace>/.env.local",
+            "container_path": "/home/sandy/dev/<this-workspace>/.env.local",
             "line": "SERVICE_API_TOKEN=<value>",
-            "mount": {"source": "<host workspace root>", "target": "/home/claude/dev/<this-workspace>", "rw": true, "sandy_ref": "sandy:8499"},
+            "mount": {"source": "<host workspace root>", "target": "/home/sandy/dev/<this-workspace>", "rw": true, "sandy_ref": "sandy:8499"},
             "planted_by": "host/honeytoken_check.sh --plant",
             "_note": "host_path deliberately NEVER appears here - host tooling reasons over honeytokens.json's host_path, container tooling (this file) reasons over container_path. Neither is inferred from the other; --plant computes the map once (D6)."
           }
@@ -311,8 +311,8 @@
         "planted": [
           {
             "kind": "file",
-            "container_path": "/home/claude/.cargo/credentials.toml",
-            "mount": {"source": "<sandbox_dir>/cargo", "target": "/home/claude/.cargo", "rw": true, "sandy_ref": "sandy:8352-8356"},
+            "container_path": "/home/sandy/.cargo/credentials.toml",
+            "mount": {"source": "<sandbox_dir>/cargo", "target": "/home/sandy/.cargo", "rw": true, "sandy_ref": "sandy:8352-8356"},
             "planted_by": "host/honeytoken_check.sh --plant"
           }
         ],

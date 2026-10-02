@@ -31,6 +31,7 @@ ev_planned L7.01     # own segment + neighbours
 ev_planned L7.02     # CANARY: concurrent sibling session over the network
 ev_planned L7.03     # CANARY: sibling session's sandbox on disk
 ev_planned L7.04     # bounded sweep of this container's OWN segment only
+ev_planned L7.06     # cross-session inbound: in-force value no looser than the marker
 
 ev_note "L7 is only meaningful if a concurrent sibling sandy session was running (H7.01). If controls.json declares no L7-sibling canary, these tests render CONTROL-INVALID - an experiment with no treatment condition cannot produce HELD."
 echo "== end Layers 6 & 7 (verdicts are computed host-side by adjudicate.sh) =="

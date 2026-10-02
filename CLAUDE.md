@@ -107,11 +107,11 @@ models, because an in-container agent can only exercise one of them:
 | 0 | Session identity & measured posture | A, **D** | 1 | yes — the gate; **L0.06** enumerates this session's authority |
 | 1 | Network egress | A, **D** | mixed (mostly 1; the proxy-attack block is 3) | yes — **L1.15** states the bound no egress policy can close |
 | 2 | Filesystem | A, C, **D** | mixed (mostly 1; traversal/procfs primitives are 3) | preventive yes; **detective (session-end) is host-side** |
-| 3 | Credentials | A, **D** | 1 | yes — **L3.07** honeytoken surface; **use** is graded host-side (H3.01) |
+| 3 | Credentials | A, **D** | 1 | yes — **L3.07** honeytoken surface, **L3.09** `.env` readability (R2b), **L3.11** credential posture (`cred_mode`, connectors off); **use** is graded host-side (H3.01) |
 | 4 | Process / privilege | A, **D** | mixed (mostly 1; setuid follow-on is 3) | yes |
 | 5 | Resources | A | 1 | yes (read ceilings; one opt-in bounded enforcement probe) |
 | 6 | Config trust-tier | **B**, C | 2 (uniform — every finding needs a host-parsed artifact) | **mostly NO** — parser runs host-side; you deliver a PoC |
-| 7 | Per-instance / concurrency | A | 1 | only if a **concurrent sibling session** exists |
+| 7 | Per-instance / concurrency | A, **D** | 1 | sibling tests only if a **concurrent sibling session** exists; **L7.06** (cross-session inbound — is the messaging surface in force no looser than the marker declares?) always |
 | 8 | Persistence & supply chain | A, C, **D** | 1 (uniform) | in-container proves writable+host-backed; **survival is host-side (H8.01)**. D's most natural layer — a goal-seeker installs the helper that makes next session easier, no malice needed |
 
 Tier is orthogonal to layer and to adversary: it labels the **least capable adversary for

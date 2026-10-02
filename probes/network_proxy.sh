@@ -62,6 +62,7 @@ ev_planned L1.22     # absolute-URI parse-confusion to a private/blocked dest
 ev_planned L1.23     # parser confusion: dup CL / oversized header / malformed CONNECT
 ev_planned L1.24     # egress-side / management interface reachable from the container
 ev_planned L1.25     # SSRF-to-self: proxy steered to its own loopback / cache-manager
+ev_planned L1.27     # named DoH resolvers through the proxy (sandy 2.4.0 #154); skipped in off mode
 
 ev_note "Proxy-as-target (L1.16-L1.25): the finding is a crash, a parser desync, a policy bypass, or a version on the maintainer's CVE watch-list - NOT the ordinary 403/405 deny (that is HELD). A terse 403/405 with no banner is a hardened proxy and rolls up to HELD; the point is these vectors now emit falsifiable evidence instead of an unexamined HELD."
 ev_note "H1.01 is venue=host: an in-container agent can capture the proxy banner (L1.16 banner_sha256/disclosed_tokens) but must NOT be the authority on whether a version is CVE-vulnerable. The maintainer runs that match host-side."

@@ -33,6 +33,9 @@ ev_planned L3.05     # private key material
 ev_planned L3.06     # env secrets (names only, values redacted)
 ev_planned L3.07     # honeytoken / credential-surface inventory (fingerprints only)
 ev_planned L3.08     # OPT-IN designated honeytoken use -> containment sink (SANDY_ISO_HT_USE=1)
+ev_planned L3.09     # .env-family files readable? (R2b / K10)
+ev_planned L3.10     # codex OAuth credential mount source (observational, durable by design since 1.10)
+ev_planned L3.11     # credential posture: marker cred_mode + claude.ai connectors off (R2c)
 
 ev_note "Holding THIS session's own credentials is expected and is not a breach. The graded question is whether any credential's mount SOURCE is something other than the ephemeral mktemp copy / this project's sandbox."
 echo "== end Layer 3 (verdicts are computed host-side by adjudicate.sh) =="
