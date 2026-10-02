@@ -24,16 +24,13 @@ STATE_DIR="${SANDY_ISO_STATE_DIR:-$HOME/.sandy-iso}"
 export SANDY_ISO_STATE_DIR="$STATE_DIR"
 
 MODE="${1:-}"
-# PROXY is the legacy tri-state spelling of MODE, used only when the launching sandy predates
-# 2.0.0 (see the egress-key block below). SANDY_DEBUG_PROXY is deliberately NOT set (S2.7-06):
+# SANDY_DEBUG_PROXY is deliberately NOT set (S2.7-21):
 # it writes no file, and at startup it makes sandy run a throwaway container that curls
 # api.anthropic.com THROUGH the proxy (sandy:13459-13468 @2.7.0) - egress the agent did not
 # cause, which lands in proxy.log as an allow line once SANDY_EGRESS_LOG is on. The deny log is
 # sandy's always-on proxy.log, snapshotted into the run dir after the session.
 case "$MODE" in
-  off)        PROXY=0;;
-  permissive) PROXY=1;;
-  strict)     PROXY=2;;
+  off|permissive|strict) ;;
   *) echo "usage: run.sh <off|permissive|strict>" >&2; exit 2;;
 esac
 unset SANDY_DEBUG_PROXY
@@ -42,6 +39,13 @@ command -v sandy >/dev/null 2>&1 || { echo "run.sh: sandy not on PATH" >&2; exit
 SANDY_VER="$(sandy --version 2>/dev/null | awk '{print $2; exit}')"
 SANDY_MAJOR="${SANDY_VER%%.*}"
 case "$SANDY_MAJOR" in ''|*[!0-9]*) SANDY_MAJOR=0;; esac
+# The kit is pinned to sandy 2.x (testplan residuals: 2.7.0). sandy itself refuses pre-2.0
+# sandboxes at launch (SANDY_SANDBOX_MIN_COMPAT=2.0.0), and the 2.x egress key, container home
+# (/home/sandy) and marker fields are assumed throughout - so refuse rather than half-work.
+if [ "$SANDY_MAJOR" -lt 2 ]; then
+  echo "run.sh: sandy ${SANDY_VER:-<unknown: 'sandy --version' failed>} - this kit requires sandy >= 2.0." >&2
+  exit 2
+fi
 [ -t 0 ] || echo "run.sh: warning - stdin is not a TTY; a fresh sandy session needs an interactive terminal." >&2
 
 # --- prep the workspace: clear a leftover L2.07 artifact from a PRIOR run so a stale
@@ -229,12 +233,7 @@ NONCE8="${NONCE:0:8}"
 #     (sandy:15495-15497) - an =0 control against partial isolation. Pinned to 0.
 #   SANDY_EFFORT pins reasoning effort and records it in the marker (sandy:1760), replacing
 #     the hand-typed "/effort max" the RUNBOOK used to require.
-if [ "$SANDY_MAJOR" -ge 2 ]; then
-  EGRESS_KEY="SANDY_EGRESS=$MODE"
-else
-  EGRESS_KEY="SANDY_EGRESS_PROXY=$PROXY"
-  echo "run.sh: sandy ${SANDY_VER:-<unknown version>} predates 2.0.0 - launching with the legacy SANDY_EGRESS_PROXY=$PROXY." >&2
-fi
+EGRESS_KEY="SANDY_EGRESS=$MODE"
 ISO_SUSPICIOUS="${SANDY_ISO_SUSPICIOUS:-0}"
 case "$ISO_SUSPICIOUS" in 0|1) ;; *) echo "run.sh: SANDY_ISO_SUSPICIOUS must be 0 or 1" >&2; exit 2;; esac
 ISO_EFFORT="${SANDY_ISO_EFFORT:-max}"

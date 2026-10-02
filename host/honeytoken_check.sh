@@ -119,8 +119,8 @@ TEST_EXTRA_UNMOUNTED = os.environ.get("SANDY_ISO_HT_TEST_UNMOUNTED_PATH", "")
 # The agent's home inside the container. sandy 2.0.0 (#248) renamed the container user
 # claude -> sandy and the home /home/claude -> /home/sandy (sandy:12885-12889, 16995 @2.7.0),
 # and refuses pre-2.0 sandboxes at launch, so the old value can never be right for a launch the
-# kit can make. SANDY_ISO_CONTAINER_HOME overrides it for a pre-2.0 sandy.
-CONTAINER_HOME = os.environ.get("SANDY_ISO_CONTAINER_HOME", "/home/sandy")
+# kit can make.
+CONTAINER_HOME = "/home/sandy"
 
 # ---------------------------------------------------------------- shared helpers
 

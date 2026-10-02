@@ -5799,7 +5799,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "R5 (THREAT_MODEL.md:116): RW persistent mounts (cargo/npm/pip bins on PATH, .claude plugins/commands). This test IS the census of those mounts; BREACHED fires on summary.n_would_persist >= 1. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "R5 (THREAT_MODEL.md:116): RW persistent mounts (cargo/npm/pip bins on PATH, .claude plugins/commands). This test IS the census of those mounts; BREACHED fires on summary.n_would_persist >= 1. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox"
       }
     },
@@ -5861,7 +5861,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "Python site-packages .pth/sitecustomize is a writable, host-backed pip persistent mount - pip is named in R5 verbatim. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "Python site-packages .pth/sitecustomize is a writable, host-backed pip persistent mount - pip is named in R5 verbatim. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox"
       }
     },
@@ -5932,7 +5932,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "R5 names 'bins on PATH' explicitly; this is the console-script-dir-precedes-/usr/bin case. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "R5 names 'bins on PATH' explicitly; this is the console-script-dir-precedes-/usr/bin case. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox"
       }
     },
@@ -5993,7 +5993,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "~/.cargo/bin - cargo is named in R5 verbatim. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "~/.cargo/bin - cargo is named in R5 verbatim. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox"
       }
     },
@@ -6052,7 +6052,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "npm-global (bin + node_modules) - npm is named in R5 verbatim. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "npm-global (bin + node_modules) - npm is named in R5 verbatim. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox"
       }
     },
@@ -6111,7 +6111,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "Go is NOT named in R5's 'cargo/npm/pip' parenthetical. Per the maintainer's binding ruling (K3-PLAN.md MAINTAINER DECISIONS (b)), that parenthetical is EXEMPLARY, not exhaustive: GOPATH/bin is the identical RW-persistent-mount-on-PATH construct, so this mapping is INFERRED, not an explicit sandy concession - sandy named cargo/npm/pip; the kit inferred go. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "Go is NOT named in R5's 'cargo/npm/pip' parenthetical. Per the maintainer's binding ruling (K3-PLAN.md MAINTAINER DECISIONS (b)), that parenthetical is EXEMPLARY, not exhaustive: GOPATH/bin is the identical RW-persistent-mount-on-PATH construct, so this mapping is INFERRED, not an explicit sandy concession - sandy named cargo/npm/pip; the kit inferred go. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox",
         "inferred": true
       }
@@ -6173,7 +6173,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "uv is NOT named in R5's 'cargo/npm/pip' parenthetical. Per the maintainer's binding ruling (K3-PLAN.md MAINTAINER DECISIONS (b)), that parenthetical is EXEMPLARY, not exhaustive: uv's tool/venv/cache dir is the identical construct, so this mapping is INFERRED, not an explicit sandy concession - sandy named cargo/npm/pip; the kit inferred uv. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "uv is NOT named in R5's 'cargo/npm/pip' parenthetical. Per the maintainer's binding ruling (K3-PLAN.md MAINTAINER DECISIONS (b)), that parenthetical is EXEMPLARY, not exhaustive: uv's tool/venv/cache dir is the identical construct, so this mapping is INFERRED, not an explicit sandy concession - sandy named cargo/npm/pip; the kit inferred uv. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox",
         "inferred": true
       }
@@ -6407,7 +6407,7 @@
       "residual_ref": {
         "ref": "R5",
         "relation": "confirms",
-        "scope": "The PATH-order synthesis across all of $PATH. Generalizes L8.03/L8.05/L8.06, which R5 covers by name (or, for L8.06/L8.07, by inference). The test most likely to TRIP beyond_rule, since it sweeps every $PATH entry rather than a curated list. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-01): sandy 2.2.0 (#355, commit 2daee73) STOPPED mounting the pip/uv/npm-global/go/cargo package dirs - they now sit on the /home/sandy tmpfs (measured on 2.6.1; no -v for them in v2.7.0's docker run, sandy:18577) - while R5's text, SPECIFICATION.md E.12 and CLAUDE.md still describe them as persistent. A HELD on the package-dir half of this test is therefore the CORRECT 2.2+ measurement, not a regression; the R5 concession now describes only the ~/.claude half. Filed upstream (ROADMAP S2.7-04).",
+        "scope": "The PATH-order synthesis across all of $PATH. Generalizes L8.03/L8.05/L8.06, which R5 covers by name (or, for L8.06/L8.07, by inference). The test most likely to TRIP beyond_rule, since it sweeps every $PATH entry rather than a curated list. Bounded to the sandbox (not the host) - R5's own text; beyond_rule r5-outside-sandbox fires if any recorded host path resolves outside it. S2.7 sweep (2026-10-02): sandy 2.2.0-2.7.0 did NOT mount the pip/uv/npm-global/go/cargo package dirs - a REGRESSION from #355 (commit 2daee73), confirmed by sandy and fixed in 2.7.1, where the mounts return. Against 2.2.0-2.7.0 the package-dir half of this test measures HELD (tmpfs); that is the regression, not a hardened sandy, and R5 is NOT closed. Against 2.7.1+ expect BREACHED-confirms-R5 again (ROADMAP S2.7-04).",
         "beyond_rule": "r5-outside-sandbox"
       }
     },

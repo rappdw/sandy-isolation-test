@@ -574,8 +574,8 @@ Status key: ✅ fixed in the sweep PR · 🟡 partly fixed · ⏳ filed, not yet
 | S2.7-01 | CRITICAL | Proxy-log "empty" gate counts bytes → can never fire | ✅ |
 | S2.7-02 | CRITICAL | Leftover `/home/claude` paths (L2.10, honeytoken map, fallbacks) | ✅ |
 | S2.7-03 | HIGH | Sandbox paths constructed by hand / basename glob (#386 contract; K11) | ✅ run.sh · ⏳ honeytoken_check |
-| S2.7-04 | CRITICAL | Package dirs not host-backed since 2.2.0 — L8 R5 framing wrong; sandy docs stale | 🟡 kit framing fixed · sandy follow-up |
-| S2.7-05 | HIGH | `HT-registry-token` decoy planted in an unmounted dir (dead decoy) | ⏳ |
+| S2.7-04 | CRITICAL | Package dirs not host-backed in 2.2.0–2.7.0 — a sandy **regression**, mounts restored in 2.7.1 | ✅ kit framing · sandy fixing in 2.7.1 |
+| S2.7-05 | HIGH | `HT-registry-token` decoy unreachable on 2.2.0–2.7.0 (follows S2.7-04) | ✅ keep; live again on 2.7.1 |
 | S2.7-06 | HIGH | Egress key: `SANDY_EGRESS` wins over the kit's `SANDY_EGRESS_PROXY`; SUSPICIOUS / ALLOW_NO_ISOLATION can change the mode; K5 targets deprecated keys | ✅ |
 | S2.7-07 | CRITICAL | L3.04 false BREACHED on every codex-OAuth session | ✅ |
 | S2.7-08 | HIGH | Residual registry: R3 drifted; new R2c invisible to the kit's drift check | ✅ |
@@ -623,7 +623,7 @@ and refuses pre-2.0 sandboxes (`sandy:13760-13808`). `testplan.json` L2.10 ran
 `host/honeytoken_check.sh:119` hard-coded `CONTAINER_HOME="/home/claude"`, so every derived
 `container_path` and the `docker exec` verify pointed at a non-existent path;
 `controls.json.example` and four probe fallbacks likewise. **Fix:** `$HOME` in L2.10;
-`/home/sandy` elsewhere (`SANDY_ISO_CONTAINER_HOME` overrides for a pre-2.0 sandy).
+`/home/sandy` elsewhere. (No pre-2.0 override: sandy refuses pre-2.0 sandboxes, `SANDY_SANDBOX_MIN_COMPAT=2.0.0`, and `run.sh` now refuses sandy < 2.0.)
 
 ## S2.7-03 — sandbox paths are private layout in 2.7.0 (#386) — ✅ run.sh · ⏳ honeytoken_check
 
@@ -634,14 +634,14 @@ layout itself is unchanged today (`SANDBOX_DIR=$SANDY_HOME/sandboxes/<sanitized-
 `sandy:12239-12245`; `proxy.log` at `sandy:13446`).
 - `host/run.sh` glob `sandboxes/<basename>-*` — unsanitized basename (a space or `+` matched
   nothing) and could select another project's sandbox (**K11**). **Fixed:** `--print-state`,
-  with the glob as a flagged fallback for an older sandy. **This closes K11.**
+  with the glob as a flagged fallback if `--print-state` lists no match. **This closes K11.**
 - `host/honeytoken_check.sh` `ht_map()` re-implements the hash + container name. It must work
   *before* a sandbox exists (planting), so it keeps the arithmetic; ⏳ prefer `--print-state`
   when the sandbox already exists, and use the `sandy.workspace_path` label for daemon containers.
 - `probes/_fsop.py` `SANDBOX_RE` hard-coded `/.sandy/sandboxes/` — **fixed** to also match a
   custom `SANDY_HOME`.
 
-## S2.7-04 — package dirs are no longer host-backed (since 2.2.0) — 🟡
+## S2.7-04 — package dirs not host-backed in 2.2.0–2.7.0: a sandy regression — ✅ (kit) · fixed in sandy 2.7.1
 
 **CRITICAL (framing).** Commit `2daee73` (#355, first in v2.2.0) deleted the `-v` mounts for
 pip / uv / npm-global / go / cargo along with the handoff block it removed. v2.7.0's only
@@ -654,24 +654,28 @@ the `--reset-sandbox` rationale (`CLAUDE.md:452`), THREAT_MODEL R5 (`:116`, "car
 on PATH"). Sandy's tests (`test/run-tests.sh:248`) build their own `docker run` with the mounts,
 so they cannot catch it.
 
-Effect: L8.01–L8.07 / L8.11 now measure **HELD** on the package-dir half — correct, but R5 still
-concedes it. **Kit fix (done):** the tests are unchanged (the measurement is right); their
-`residual_ref` scope now says so. **⏳ sandy follow-up:** either restore the mounts (if the
-persistence was intended) or update §E.12 / R5 / the reset rationale — it is either a silent
-regression or a silent partial closure of R5. (The workspace `.venv` overlay, `sandy:17197`, *is*
-rw + host-backed and was missing from L8.01 — added.)
+**Sandy's answer (2026-10-02, via the sandy-repo agent): a regression, not a closure of R5.** The
+mounts were dropped in a hurry while chasing #355; the UX cost (every launch re-downloads
+toolchains; a heavy `uv sync` can hit ENOSPC on the 2 G tmpfs) outweighs the carryover saving,
+and `--reset-sandbox` already clears all five (`sandy:13843`), so the carryover was always
+reset-bounded. **The mounts are re-added in 2.7.1; R5 and the persistence docs stay correct.**
 
-## S2.7-05 — `HT-registry-token` is planted where the agent cannot see it — ⏳
+Effect on the kit: against 2.2.0–2.7.0, L8.01–L8.07 / L8.11 measure **HELD** on the package-dir
+half — a correct measurement of the regression, not of a hardened sandy. Against 2.7.1+ they return
+to BREACHED-confirms-R5. **Kit fix (done):** tests unchanged; their `residual_ref` scope names the
+2.2.0–2.7.0 window. R5 is **not** marked closed. (The workspace `.venv` overlay, `sandy:17197`,
+*is* rw + host-backed and was missing from L8.01 — added.)
+
+## S2.7-05 — `HT-registry-token` is unreachable on sandy 2.2.0–2.7.0 — ✅ keep the decoy
 
 **HIGH.** Consequence of S2.7-04: the decoy is written to `<sandbox>/cargo/credentials.toml`,
 which sandy ≥ 2.2.0 no longer mounts. K1's measured verify (`docker exec … test -r`) reports it
 `N`, so this is a **dead decoy loudly reported**, not a false pass — but H3.01 can never be fully
 verified while it is declared. `honeytoken_check.sh` `known_mount_for()` still lists
 cargo/pip/uv/npm-global/go as mount roots (old `sandy:8352-8356`), and `host/t/test_ht_map.sh`
-asserts that. **Fix:** relocate the registry decoy to a still-mounted rw location (candidates:
-the workspace `.venv` overlay; a workspace `.cargo/config.toml` — check it is not protected), drop
-the stale roots from `known_mount_for`, update the tests. RUNBOOK now flags the decoy as
-unreachable on ≥ 2.2.0.
+asserts that. **Resolution:** with the mounts restored in 2.7.1 (S2.7-04) the decoy is reachable again, so it is
+kept as is, with `known_mount_for` unchanged. On 2.2.0–2.7.0 the measured verify reports it
+missing, which is honest. RUNBOOK flags the window.
 
 ## S2.7-06 — egress key and the knobs that silently change the mode — ✅
 
@@ -686,8 +690,9 @@ choice wins — only `off` does); `SANDY_ALLOW_NO_ISOLATION=1` lets an off launc
 missing DROP (`sandy:15495-15497`). adjudicate's requested-vs-declared check caught the mode
 cases, but only after burning the run.
 
-**Fix (done).** `run.sh` launches with `SANDY_EGRESS=$MODE` (legacy key only for sandy < 2.0,
-detected via `sandy --version`), `env -u`s all egress aliases, and pins `SANDY_SUSPICIOUS=0`,
+**Fix (done).** `run.sh` refuses sandy < 2.0 (pinned to current, per the sandy-repo agent: a
+pre-2.0 path can never run against a live sandy), launches with `SANDY_EGRESS=$MODE`, `env -u`s all
+egress aliases, and pins `SANDY_SUSPICIOUS=0`,
 `SANDY_ALLOW_NO_ISOLATION=0`, `SANDY_EFFORT=max` from the env (only a non-empty env value beats a
 config value). All recorded in the manifest. **K5 is superseded by this item** — its migration
 target was itself deprecated.
@@ -874,16 +879,22 @@ the host `~/.claude/hooks:ro` (`sandy:17017`) as UNCLASSIFIED; add labels, and m
 
 ## Sandy follow-ups from this sweep
 
-- **Package dirs (S2.7-04):** restore the mounts or update SPEC §E.12, THREAT_MODEL R5 and the
-  `--reset-sandbox` rationale. Sandy's own test builds its own `docker run`, so it can't catch it.
-- **`--reset-sandbox` keeps `claude/.claude.json`** (S2.7-10): the R5 remediation leaves the one
-  file whose `mcpServers` block auto-starts a process next session. Pending H8.02 measurement.
-- **`SANDY_SUSPICIOUS` vs an explicit permissive** (S2.7-06): the comment says an explicit egress
-  choice wins; the code only honours an explicit `off` (`sandy:11937-11946`).
-- **Feature manifest `from`** (S2.7-17): not required to be per-sandbox in rw mode.
-- **Daemon mode in the marker** (S2.7-15/22): the marker cannot tell daemon from foreground, so
-  the kit cannot scope process-persistence findings.
-- **Durable codex OAuth** (S2.7-07): not covered by any §5 row.
+Status from the sandy-repo agent's reply (2026-10-02):
+
+- **Package dirs (S2.7-04):** confirmed regression; mounts **re-added in 2.7.1**. Note for sandy:
+  its own test builds its own `docker run`, so it could not catch the removal.
+- **`--reset-sandbox` keeps `claude/.claude.json`** (S2.7-10): confirmed and **intended** (#400
+  decision 3 — operator `mcpServers` survive a reset); sandy adds a doc note that a reset no longer
+  clears that auto-start surface. H8.02 stays as the measurement.
+- **`SANDY_SUSPICIOUS` vs an explicit permissive** (S2.7-06): confirmed; sandy fixes the comment
+  and adds a notice when an explicit permissive is overridden to strict.
+- **Feature manifest `from`** (S2.7-17): issue filed to verify.
+- **Daemon mode in the marker** (S2.7-15/22): issue filed. Meanwhile scope host-side via
+  `sandy --print-state` (daemon containers carry `sandy.daemon=true`).
+- **Durable codex OAuth** (S2.7-07): issue filed.
+- **Kit planting note:** modern GNU `cp` refuses to write through a dangling symlink, so a
+  `cp`-based through-link write never fires; the live vector is shell redirection (`cat >`). No
+  current kit probe uses `cp` through a link — encode this if one is ever added.
 - **Resolved upstream since 2026-08-02:** `SANDY_ALLOW_LAN_HOSTS` `host:port` now warns "was NOT
   applied" (`sandy:15446-15464`) instead of claiming success — but still launches. **`SANDY_SSH=agent`
   mounting all of `~/.ssh`** — fixed in 1.14.0 (S2.7-16).
